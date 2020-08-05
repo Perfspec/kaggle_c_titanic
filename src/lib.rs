@@ -1,6 +1,7 @@
 use std::error::Error;
 use csv::Reader;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 pub struct Config {
     pub training_data_filename: String,
@@ -24,10 +25,15 @@ impl Config {
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let mut training_data = Reader::from_path(config.training_data_filename)?;
 	
+	// Initialize cdfs
+	let mut passenger_class_cdf = HashMap::new();
+	
 	for result in training_data.deserialize() {
         let record: TrainingRecord = result?;
-        println!("{:?}", record);
+        record.update_passenger_class_cdf(&mut passenger_class_cdf);
     }
+	
+	println!("{:?}", passenger_class_cdf);
 	
     Ok(())
 }
@@ -92,7 +98,7 @@ struct TrainingRecord {
     sex: Option<Sex>,
 	
 	#[serde(rename = "Age")]
-    age: Option<f32>,
+    age: Option<f64>,
 	
 	#[serde(rename = "SibSp")]
     siblings_spouses: Option<u8>,
@@ -104,13 +110,35 @@ struct TrainingRecord {
     ticket_id: Option<String>,
 	
 	#[serde(rename = "Fare")]
-    fare: Option<f32>,
+    fare: Option<f64>,
 	
 	#[serde(rename = "Cabin")]
     cabin_id: Option<String>,
 	
 	#[serde(rename = "Embarked")]
     port_of_embarkation: Option<PortOfEmbarkation>,
+}
+
+impl TrainingRecord {
+	fn update_passenger_class_cdf(&self, cdf: &mut HashMap<String, u64>) {
+		match self.passenger_class {
+			None => (),
+			Some(PassengerClass::First) => {
+				update_cdf(&"first".to_string(), cdf);
+			},
+			Some(PassengerClass::Second) => {
+				update_cdf(&"second".to_string(), cdf);
+			},
+			Some(PassengerClass::Third) => {
+				update_cdf(&"third".to_string(), cdf);
+			},
+		}
+	}
+}
+
+fn update_cdf(key: &String, cdf: &mut HashMap<String, u64>) {
+	let count = cdf.entry(key.clone()).or_insert(1);
+	*count += 1;
 }
 
 #[derive(Debug, Deserialize)]
@@ -128,7 +156,7 @@ struct Record {
     sex: Option<Sex>,
 	
 	#[serde(rename = "Age")]
-    age: Option<f32>,
+    age: Option<f64>,
 	
 	#[serde(rename = "SibSp")]
     siblings_spouses: Option<u8>,
@@ -140,7 +168,7 @@ struct Record {
     ticket_id: Option<String>,
 	
 	#[serde(rename = "Fare")]
-    fare: Option<f32>,
+    fare: Option<f64>,
 	
 	#[serde(rename = "Cabin")]
     cabin_id: Option<String>,

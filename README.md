@@ -14,8 +14,7 @@ We begin our analysis by counting the proportion of people that survived given v
 i.e. P(Survived|Scenario) for various scenarios.
 
 These fields are discrete, i.e. None or Some(x), where x is an enum or integer.
-We'll make a hashmap of the with the values of the probability mass function.
-These can be summed to create the cumulative distribution function.
+We'll make a hashmap of the with the values of the cumulative distribution function.
 1. passenger_class
 2. sex
 3. number of cabins
@@ -23,7 +22,7 @@ These can be summed to create the cumulative distribution function.
 5. parents_children
 
 These fields are continuous, i.e. None or Some(x), where x is a float.
-We'll make a hashmap of the with the values of the cumulative distribution functions on a grid.
+We'll make a hashmap of the with the values of the cumulative distribution function on a grid.
 1. age
 2. fare
 
@@ -33,3 +32,12 @@ Also, the cabin_id may have spatial data that shows that a certain part of the b
 3. number of cabins. Some passengers seemed to pay for multiple cabins, this may have meant more exits and so safer?
 
 This could be enriched by gathering records of the ship's layout and modelling the positions of the cabins.
+
+	match cdf.get(key) {
+		None => {
+			cdf.insert(*key, 1);
+		},
+		Some(value) => {
+			cdf.insert(*key, value+1);
+		},
+	}
