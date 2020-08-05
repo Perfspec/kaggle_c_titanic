@@ -33,7 +33,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         record.update_passenger_class_cdf(&mut passenger_class_cdf);
     }
 	
-	println!("{:?}", passenger_class_cdf);
+	println!("passenger_class_cdf: {:?}", passenger_class_cdf);
 	
     Ok(())
 }
