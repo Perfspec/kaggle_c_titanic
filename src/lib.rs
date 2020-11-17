@@ -25,15 +25,24 @@ impl Config {
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let mut training_data = Reader::from_path(config.training_data_filename)?;
 	
-	// Initialize cdfs
-	let mut passenger_class_cdf = HashMap::new();
+	// Initialize pmfs
+	let mut passenger_class_pmf = HashMap::new();
+	let mut sex_pmf = HashMap::new();
+	let mut age_pmf = HashMap::new();
+	let mut siblings_spouses_pmf = HashMap::new();
 	
 	for result in training_data.deserialize() {
         let record: TrainingRecord = result?;
-        record.update_passenger_class_cdf(&mut passenger_class_cdf);
+        record.update_passenger_class_pmf(&mut passenger_class_pmf);
+		record.update_sex_pmf(&mut sex_pmf);
+		record.update_age_pmf(&mut age_pmf);
+		record.update_siblings_spouses_pmf(&mut siblings_spouses_pmf);
     }
 	
-	println!("passenger_class_cdf: {:?}", passenger_class_cdf);
+	println!("passenger_class_pmf: {:?}", passenger_class_pmf);
+	println!("sex_pmf: {:?}", sex_pmf);
+	println!("age_pmf: {:?}", age_pmf);
+	println!("siblings_spouses_pmf: {:?}", siblings_spouses_pmf);
 	
     Ok(())
 }
@@ -120,24 +129,86 @@ struct TrainingRecord {
 }
 
 impl TrainingRecord {
-	fn update_passenger_class_cdf(&self, cdf: &mut HashMap<String, u64>) {
+	fn update_passenger_class_pmf(&self, pmf: &mut HashMap<String, u64>) {
 		match self.passenger_class {
 			None => (),
 			Some(PassengerClass::First) => {
-				update_cdf(&"first".to_string(), cdf);
+				update_string_pmf(&"first".to_string(), pmf);
 			},
 			Some(PassengerClass::Second) => {
-				update_cdf(&"second".to_string(), cdf);
+				update_string_pmf(&"second".to_string(), pmf);
 			},
 			Some(PassengerClass::Third) => {
-				update_cdf(&"third".to_string(), cdf);
+				update_string_pmf(&"third".to_string(), pmf);
 			},
 		}
 	}
+	
+	fn update_sex_pmf(&self, pmf: &mut HashMap<String, u64>) {
+		match self.sex {
+			None => (),
+			Some(Sex::Male) => {
+				update_string_pmf(&"male".to_string(), pmf);
+			},
+			Some(Sex::Female) => {
+				update_string_pmf(&"female".to_string(), pmf);
+			},
+		}
+	}
+	
+	fn update_age_pmf(&self, pmf: &mut HashMap<u64, u64>) {
+		match self.age {
+			None => (),
+			Some(age) => {
+				let rounded_age = age.round() as u64;
+				update_u64_pmf(&rounded_age, pmf);
+			}
+		}
+	}
+	
+	fn update_siblings_spouses_pmf(&self, pmf: &mut HashMap<u8, u64>) {
+		match self.siblings_spouses {
+			None => (),
+			Some(siblings_spouses) => {
+				update_u8_pmf(&siblings_spouses, pmf);
+			}
+		}
+	}
+	
+	fn update_parents_children_pmf(&self, pmf: &mut HashMap<u8, u64>) {
+		match self.parents_children {
+			None => (),
+			Some(parents_children) => {
+				update_u8_pmf(&parents_children, pmf);
+			}
+		}
+	}
+	
+	fn update_fare_pmf(&self, pmf: &mut HashMap<u64, u64>) {
+		match self.fare {
+			None => (),
+			Some(fare) => {
+				let rounded_fare = fare.round() as u64;
+				update_u64_pmf(&rounded_fare, pmf);
+			}
+		}
+	}
+	
+	
 }
 
-fn update_cdf(key: &String, cdf: &mut HashMap<String, u64>) {
-	let count = cdf.entry(key.clone()).or_insert(1);
+fn update_string_pmf(key: &String, pmf: &mut HashMap<String, u64>) {
+	let count = pmf.entry(key.clone()).or_insert(0);
+	*count += 1;
+}
+
+fn update_u64_pmf(key: &u64, pmf: &mut HashMap<u64, u64>) {
+	let count = pmf.entry(*key).or_insert(0);
+	*count += 1;
+}
+
+fn update_u8_pmf(key: &u8, pmf: &mut HashMap<u8, u64>) {
+	let count = pmf.entry(*key).or_insert(0);
 	*count += 1;
 }
 
