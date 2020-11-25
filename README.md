@@ -5,6 +5,8 @@ This programme will be a command line interface to generate prediction files (ou
 
 Run this programme: `cargo run`
 
+Upload docs/main.tex to [Some Latex Runtime](https://www.overleaf.com/) to see mathematical documentation for this programme.
+
 The contents of train.csv should be printed to the console, where the records have been loaded using the csv crate and deserialized using the serde crate.
 This means that the records in train.csv must align with the struct TrainingRecord, as defined in lib.rs, or the application will throw an error.
 
@@ -32,12 +34,3 @@ Also, the cabin_id may have spatial data that shows that a certain part of the b
 3. number of cabins. Some passengers seemed to pay for multiple cabins, this may have meant more exits and so safer?
 
 This could be enriched by gathering records of the ship's layout and modelling the positions of the cabins.
-
-	match cdf.get(key) {
-		None => {
-			cdf.insert(*key, 1);
-		},
-		Some(value) => {
-			cdf.insert(*key, value+1);
-		},
-	}

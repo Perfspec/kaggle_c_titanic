@@ -1,0 +1,84 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[a5paper, margin=1.2in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\title{Kaggle Titanic}
+\author{lewisrwebb }
+\date{November 2020}
+
+\begin{document}
+
+\maketitle
+
+
+
+\section{Plan}
+
+Consider the variable $Passenger^{(i)}$, which is a vector of continuous and discrete variables. The continuous variables are age and fare. The discrete variables are passenger class, sex, siblings/spouses, parents/children, port of embarkation.
+
+We want to predict whether the $Passenger^{(i)}$ survived or died on the titanic voyage. This is a binary classification problem.
+
+Our prediction will be based on a hypothesis function, which depends on $\theta$, a the vector of parameters that will change to minimize the error in our hypothesis, given the passenger records used for training:
+
+\begin{equation}
+\begin{split}
+h_{\theta}(Passenger^{(i)}) =
+ &
+ & 1/(1 + e^{f_{\theta}(Passenger^{(i)})})
+\end{split}
+\end{equation}
+
+, where
+
+\begin{equation}
+\begin{split}
+f_{\theta}(Passenger^{(i)}) =
+ &
+ & \theta^T Passenger^{(i)}.encode()
+\end{split}
+\end{equation}
+
+is the combination of $\theta$ and an encoded passenger record $Passenger^{(i)}.encode()$.
+
+We will measure the error in our hypothesis (during testing) using the average cost:
+
+\begin{equation}
+\begin{split}
+AvgCost(\theta) =
+ &
+ & \frac{1}{m}\sum_{i=1}^m Cost(h_{\theta}(Passenger^{(i)}), PassengerSurvived^{(i)})
+\end{split}
+\end{equation}
+
+, where
+
+\begin{equation}
+\begin{split}
+Cost(h_{\theta}(Passenger^{(i)}), PassengerSurvived^{(i)}) =
+ &
+ & - PassengerSurvived^{(i)}
+ &
+ & \times ~ log(h_{\theta}(Passenger^{(i)}))
+ &
+ & - (1-PassengerSurvived^{(i)})
+ &
+ & \times ~ log(1-h_{\theta}(Passenger^{(i)}))
+\end{split}
+\end{equation}
+
+In order to solve our initial problem, to predict whether the $Passenger$ survived or died on the titanic voyage, we want to find a hypothesis $h_{\theta}(Passenger)$ which minimizes the average cost over $\theta$: $ min_{\theta} ~ AvgCost(\theta)$.
+
+To minimize $AvgCost(\theta)$, we will repeat the following gradient descent update, where all $\theta_j$ are updated at each step:
+
+\begin{equation}
+\begin{split}
+\theta_j
+ & = \theta_j - \alpha \frac{\partial}{\partial\theta_j} AvgCost(\theta)
+ &
+ & = \theta_j - \alpha \sum_{i=1}^m (h_{\theta}(Passenger^{(i)}) - PassengerSurvived^{(i)}) ~ Passenger_j^{(i)}
+\end{split}
+\end{equation}
+
+\end{document}
