@@ -16,7 +16,6 @@ We begin our analysis by counting the proportion of people that survived given v
 i.e. P(Survived|Scenario) for various scenarios.
 
 These fields are discrete, i.e. None or Some(x), where x is an enum or integer.
-We'll make a hashmap of the with the values of the cumulative distribution function.
 1. passenger_class
 2. sex
 3. number of cabins
@@ -24,7 +23,6 @@ We'll make a hashmap of the with the values of the cumulative distribution funct
 5. parents_children
 
 These fields are continuous, i.e. None or Some(x), where x is a float.
-We'll make a hashmap of the with the values of the cumulative distribution function on a grid.
 1. age
 2. fare
 
