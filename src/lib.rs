@@ -48,15 +48,33 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     // Initialize weights
     let mut passenger_weights = PassengerWeights::new();
 	
-	let mut avg_cost = passenger_weights.avg_cost(&training_passengers);
-	
-    while avg_cost.gt(tolerance) {
-		match passenger_weights.gradient_descent_update(&passengers) {
-			Ok(_) => {},
-			Err(_) => {}
-		}
+	let mut avg_cost = 0_f64;
+	let mut num_iterations = 0_u64;
+
+	match passenger_weights.avg_cost(&training_passengers) {
+		Ok(num) => {
+			avg_cost = num;
+			println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
+			
+			while avg_cost.gt(tolerance) {
+				match passenger_weights.gradient_descent_update(&learning_rate, &training_passengers) {
+					Ok(_) => {
+						num_iterations.add(1_u64);
+						match passenger_weights.avg_cost(&training_passengers) {
+							Ok(num) => {
+								avg_cost = num;
+								println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
+							},
+							Err(error) => Err(error),
+						}
+					},
+					Err(error) => Err(error),
+				}
+			}
+		},
+		Err(error) => Err(error),
 	}
-    
+        
     Ok(())
 }
 
@@ -469,7 +487,7 @@ impl PassengerWeights {
 		Ok(avg)
 	}
 	
-	pub fn gradient_descent_update(self, learning_rate: f64, training_passengers: Vec<TrainingPassenger>) -> Result<(), String> {
+	pub fn gradient_descent_update(self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
 		
 	}
 }
