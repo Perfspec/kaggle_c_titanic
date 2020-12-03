@@ -6,7 +6,7 @@ use std::fmt;
 
 pub struct Config {
     pub learning_rate: f64,
-	pub tolerance: f64,
+    pub tolerance: f64,
     pub training_data_filename: String,
     pub test_data_filename: String,
     pub output_filename: String,
@@ -25,11 +25,11 @@ impl Config {
         
         match learning_rate_string.parse::<f64>() {
             Ok(learning_rate) => {
-				match tolerance_string.parse::<f64>() {
-					Ok(tolerance) => Ok(Config {learning_rate, tolerance, training_data_filename, test_data_filename, output_filename}),
-					Err(_) => Err("unable to parse tolerance"),
-				}
-			},
+                match tolerance_string.parse::<f64>() {
+                    Ok(tolerance) => Ok(Config {learning_rate, tolerance, training_data_filename, test_data_filename, output_filename}),
+                    Err(_) => Err("unable to parse tolerance"),
+                }
+            },
             Err(_) => Err("unable to parse learning rate"),
         }
     }
@@ -47,33 +47,33 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     
     // Initialize weights
     let mut passenger_weights = PassengerWeights::new();
-	
-	let mut avg_cost = 0_f64;
-	let mut num_iterations = 0_u64;
+    
+    let mut avg_cost = 0_f64;
+    let mut num_iterations = 0_u64;
 
-	match passenger_weights.avg_cost(&training_passengers) {
-		Ok(num) => {
-			avg_cost = num;
-			println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
-			
-			while avg_cost.gt(tolerance) {
-				match passenger_weights.gradient_descent_update(&learning_rate, &training_passengers) {
-					Ok(_) => {
-						num_iterations.add(1_u64);
-						match passenger_weights.avg_cost(&training_passengers) {
-							Ok(num) => {
-								avg_cost = num;
-								println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
-							},
-							Err(error) => Err(error),
-						}
-					},
-					Err(error) => Err(error),
-				}
-			}
-		},
-		Err(error) => Err(error),
-	}
+    match passenger_weights.avg_cost(&training_passengers) {
+        Ok(num) => {
+            avg_cost = num;
+            println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
+            
+            while avg_cost.gt(tolerance) {
+                match passenger_weights.gradient_descent_update(&learning_rate, &training_passengers) {
+                    Ok(_) => {
+                        num_iterations.add(1_u64);
+                        match passenger_weights.avg_cost(&training_passengers) {
+                            Ok(num) => {
+                                avg_cost = num;
+                                println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
+                            },
+                            Err(error) => Err(error),
+                        }
+                    },
+                    Err(error) => Err(error),
+                }
+            }
+        },
+        Err(error) => Err(error),
+    }
         
     Ok(())
 }
@@ -160,83 +160,83 @@ struct TrainingPassenger {
 }
 
 impl TrainingPassenger {
-	pub fn new(
-		passenger_id: u64,
-		survived: Survived,
-		passenger_class: PassengerClass,
-		name: String,
-		sex: Sex,
-		age: f64,
-		siblings_spouses: u8,
-		parents_children: u8,
-		ticket_id: String,
-		fare: f64,
-		cabin_id: String,
-		port_of_embarkation: PortOfEmbarkation
-	) -> TrainingPassenger {
-		TrainingPassenger {
-			passenger_id,
-			survived,
-			passenger_class: Some(passenger_class),
-			name: Some(name),
-			sex: Some(sex),
-			age: Some(age),
-			siblings_spouses: Some(siblings_spouses),
-			parents_children: Some(parents_children),
-			ticket_id: Some(ticket_id),
-			fare: Some(fare),
-			cabin_id: Some(cabin_id),
-			port_of_embarkation: Some(port_of_embarkation),
-		}
-	}
-	
-	pub fn get_passenger_id(&self) -> &u64 {
-		self.passenger_id
-	}
-	
-	pub fn get_survived(&self) -> &Survived {
-		self.survived
-	}
-	
-	pub fn get_passenger_class(&self) -> &Option<PassengerClass> {
-		self.passenger_class
-	}
-	
-	pub fn get_name(&self) -> &Option<String> {
-		self.name
-	}
-	
-	pub fn get_sex(&self) -> &Option<Sex> {
-		self.sex
-	}
-	
-	pub fn get_age(&self) -> &Option<f64> {
-		self.age
-	}
-	
-	pub fn get_siblings_spouses(&self) -> &Option<u8> {
-		self.siblings_spouses
-	}
-	
-	pub fn get_parents_children(&self) -> &Option<u8> {
-		self.parents_children
-	}
-	
-	pub fn get_ticket_id(&self) -> &Option<String> {
-		self.ticket_id
-	}
-	
-	pub fn get_fare(&self) -> &Option<f64> {
-		self.fare
-	}
-	
-	pub fn get_cabin_id(&self) -> &Option<String> {
-		self.cabin_id
-	}
-	
-	pub fn get_port_of_embarkation(&self) -> &Option<PortOfEmbarkation> {
-		self.port_of_embarkation
-	}
+    pub fn new(
+        passenger_id: u64,
+        survived: Survived,
+        passenger_class: PassengerClass,
+        name: String,
+        sex: Sex,
+        age: f64,
+        siblings_spouses: u8,
+        parents_children: u8,
+        ticket_id: String,
+        fare: f64,
+        cabin_id: String,
+        port_of_embarkation: PortOfEmbarkation
+    ) -> TrainingPassenger {
+        TrainingPassenger {
+            passenger_id,
+            survived,
+            passenger_class: Some(passenger_class),
+            name: Some(name),
+            sex: Some(sex),
+            age: Some(age),
+            siblings_spouses: Some(siblings_spouses),
+            parents_children: Some(parents_children),
+            ticket_id: Some(ticket_id),
+            fare: Some(fare),
+            cabin_id: Some(cabin_id),
+            port_of_embarkation: Some(port_of_embarkation),
+        }
+    }
+    
+    pub fn get_passenger_id(&self) -> &u64 {
+        self.passenger_id
+    }
+    
+    pub fn get_survived(&self) -> &Survived {
+        self.survived
+    }
+    
+    pub fn get_passenger_class(&self) -> &Option<PassengerClass> {
+        self.passenger_class
+    }
+    
+    pub fn get_name(&self) -> &Option<String> {
+        self.name
+    }
+    
+    pub fn get_sex(&self) -> &Option<Sex> {
+        self.sex
+    }
+    
+    pub fn get_age(&self) -> &Option<f64> {
+        self.age
+    }
+    
+    pub fn get_siblings_spouses(&self) -> &Option<u8> {
+        self.siblings_spouses
+    }
+    
+    pub fn get_parents_children(&self) -> &Option<u8> {
+        self.parents_children
+    }
+    
+    pub fn get_ticket_id(&self) -> &Option<String> {
+        self.ticket_id
+    }
+    
+    pub fn get_fare(&self) -> &Option<f64> {
+        self.fare
+    }
+    
+    pub fn get_cabin_id(&self) -> &Option<String> {
+        self.cabin_id
+    }
+    
+    pub fn get_port_of_embarkation(&self) -> &Option<PortOfEmbarkation> {
+        self.port_of_embarkation
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -277,7 +277,7 @@ struct Passenger {
 
 #[derive(Debug)]
 struct PassengerWeights {
-	bias: f64,
+    bias: f64,
     passenger_class: Vec<f64>,
     name: Vec<f64>,
     sex: Vec<f64>,
@@ -317,24 +317,24 @@ impl PassengerWeights {
         //Optional enums can be fully instantiated now, because they have a maximum number of weights.
         //One for each value in the enum when Optional matches Some and one for when Optional matches None.
         let mut passenger_class = Vec::with_capacity(4);
-		passenger_class.push(1_f64);
-		passenger_class.push(1_f64);
-		passenger_class.push(1_f64);
-		passenger_class.push(1_f64);
+        passenger_class.push(1_f64);
+        passenger_class.push(1_f64);
+        passenger_class.push(1_f64);
+        passenger_class.push(1_f64);
         
         let mut sex = Vec::with_capacity(3);
-		sex.push(1_f64);
-		sex.push(1_f64);
-		sex.push(1_f64);
+        sex.push(1_f64);
+        sex.push(1_f64);
+        sex.push(1_f64);
                 
         let mut port_of_embarkation = Vec::with_capacity(4);
-		port_of_embarkation.push(1_f64);
-		port_of_embarkation.push(1_f64);
-		port_of_embarkation.push(1_f64);
-		port_of_embarkation.push(1_f64);
+        port_of_embarkation.push(1_f64);
+        port_of_embarkation.push(1_f64);
+        port_of_embarkation.push(1_f64);
+        port_of_embarkation.push(1_f64);
                 
         PassengerWeights {
-			bias,
+            bias,
             passenger_class,
             name,
             sex,
@@ -347,149 +347,149 @@ impl PassengerWeights {
             port_of_embarkation,
         }
     }
-	
-	pub fn hypothesis(&self, training_passenger: &TrainingPassenger) -> Result<f64, &'static str> {
-		let mut weighted_sum = 0_f64;
-		
-		match *training_passenger.get_passenger_class() {
-			None => {
-				match self.passenger_class.get(0) {
-					None => {
-						Err("PassengerWeights::hypothesis: passenger_class weight 0 was unreachable")
-					},
-					Some(weight) => {
-						weighted_sum.add(weight);
-					},
-				}
-			},
-			Some(passenger_class) => {
-				match passenger_class {
-					PassengerClass::First => {
-						match self.passenger_class.get(1) {
-							None => {
-								Err("PassengerWeights::hypothesis: passenger_class weight 1 was unreachable")
-							},
-							Some(weight) => {
-								weighted_sum.add(weight);
-							},
-						}
-					},
-					PassengerClass::Second => {
-						match self.passenger_class.get(2) {
-							None => {
-								Err("PassengerWeights::hypothesis: passenger_class weight 2 was unreachable")
-							},
-							Some(weight) => {
-								weighted_sum.add(weight);
-							},
-						}
-					},
-					PassengerClass::Third => {
-						match self.passenger_class.get(3) {
-							None => {
-								Err("PassengerWeights::hypothesis: passenger_class weight 3 was unreachable")
-							},
-							Some(weight) => {
-								weighted_sum.add(weight);
-							},
-						}
-					},
-				}
-			},
-		}
-		
-		match *training_passenger.get_sex() {
-			None => {
-				match self.sex.get(0) {
-					None => {
-						Err("PassengerWeights::hypothesis: sex weight 0 was unreachable")
-					},
-					Some(weight) => {
-						weighted_sum.add(weight);
-					},
-				}
-			},
-			Some(sex) => {
-				match sex {
-					Sex::Female => {
-						match self.sex.get(1) {
-							None => {
-								Err("PassengerWeights::hypothesis: sex weight 1 was unreachable")
-							},
-							Some(weight) => {
-								weighted_sum.add(weight);
-							},
-						}
-					},
-					Sex::Male => {
-						match self.sex.get(2) {
-							None => {
-								Err("PassengerWeights::hypothesis: sex weight 2 was unreachable")
-							},
-							Some(weight) => {
-								weighted_sum.add(weight);
-							},
-						}
-					},
-				}
-			},
-		}
-	}
-	
-	pub fn cost(&self, training_passenger: &TrainingPassenger) -> Result<f64, &'static str> {
-		let mut cost = 0_f64;
-		
-		match *training_passenger.get_survived() {
-			Survived::Yes => {
-				match self.hypothesis(training_passenger) {
-					Ok(hypothesis) => {
-						cost.add(hypothesis.ln());
-					},
-					Err(error) => Err(error),
-				}
-			},
-			Survived::No => {
-				match self.hypothesis(training_passenger) {
-					Ok(hypothesis) => {
-						cost.add((1 - hypothesis).ln());
-					},
-					Err(error) => Err(error),
-				}
-			},
-		}
-		Ok(-cost)
-	}
-	
-	pub fn avg_cost(&self, training_passengers: &Vec<TrainingPassenger>) -> Result<f64, String> {
-		let mut sum = 0_f64;
-		let mut counter = 0_f64;
-		
-		for training_passenger in *training_passengers {
-			match *self.cost(&training_passenger) {
-				Ok(cost) => {
-					sum.add(cost);
-				},
-				Err(e) => {
-					let passenger_id = *(training_passenger.get_passenger_id());
-					let message = format!("PassengerWeights::avg_cost was unable to calculate cost for passenger_id: {}. {}", passenger_id, e);
-					Err(message)
-				},
-			}
-			counter.add(1_f64);
-		}
-		
-		if counter.eq(0_f64) {
-			let message = "PassengerWeights::avg_cost counter is a denominator and was zero".to_string();
-			Err(message)
-		}
-		
-		let avg = sum.div(counter);
-		Ok(avg)
-	}
-	
-	pub fn gradient_descent_update(self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
-		
-	}
+    
+    pub fn hypothesis(&self, training_passenger: &TrainingPassenger) -> Result<f64, &'static str> {
+        let mut weighted_sum = 0_f64;
+        
+        match *training_passenger.get_passenger_class() {
+            None => {
+                match self.passenger_class.get(0) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: passenger_class weight 0 was unreachable")
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(passenger_class) => {
+                match passenger_class {
+                    PassengerClass::First => {
+                        match self.passenger_class.get(1) {
+                            None => {
+                                Err("PassengerWeights::hypothesis: passenger_class weight 1 was unreachable")
+                            },
+                            Some(weight) => {
+                                weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    PassengerClass::Second => {
+                        match self.passenger_class.get(2) {
+                            None => {
+                                Err("PassengerWeights::hypothesis: passenger_class weight 2 was unreachable")
+                            },
+                            Some(weight) => {
+                                weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    PassengerClass::Third => {
+                        match self.passenger_class.get(3) {
+                            None => {
+                                Err("PassengerWeights::hypothesis: passenger_class weight 3 was unreachable")
+                            },
+                            Some(weight) => {
+                                weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                }
+            },
+        }
+        
+        match *training_passenger.get_sex() {
+            None => {
+                match self.sex.get(0) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: sex weight 0 was unreachable")
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(sex) => {
+                match sex {
+                    Sex::Female => {
+                        match self.sex.get(1) {
+                            None => {
+                                Err("PassengerWeights::hypothesis: sex weight 1 was unreachable")
+                            },
+                            Some(weight) => {
+                                weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    Sex::Male => {
+                        match self.sex.get(2) {
+                            None => {
+                                Err("PassengerWeights::hypothesis: sex weight 2 was unreachable")
+                            },
+                            Some(weight) => {
+                                weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                }
+            },
+        }
+    }
+    
+    pub fn cost(&self, training_passenger: &TrainingPassenger) -> Result<f64, &'static str> {
+        let mut cost = 0_f64;
+        
+        match *training_passenger.get_survived() {
+            Survived::Yes => {
+                match self.hypothesis(training_passenger) {
+                    Ok(hypothesis) => {
+                        cost.add(hypothesis.ln());
+                    },
+                    Err(error) => Err(error),
+                }
+            },
+            Survived::No => {
+                match self.hypothesis(training_passenger) {
+                    Ok(hypothesis) => {
+                        cost.add((1 - hypothesis).ln());
+                    },
+                    Err(error) => Err(error),
+                }
+            },
+        }
+        Ok(-cost)
+    }
+    
+    pub fn avg_cost(&self, training_passengers: &Vec<TrainingPassenger>) -> Result<f64, String> {
+        let mut sum = 0_f64;
+        let mut counter = 0_f64;
+        
+        for training_passenger in *training_passengers {
+            match *self.cost(&training_passenger) {
+                Ok(cost) => {
+                    sum.add(cost);
+                },
+                Err(e) => {
+                    let passenger_id = *(training_passenger.get_passenger_id());
+                    let message = format!("PassengerWeights::avg_cost was unable to calculate cost for passenger_id: {}. {}", passenger_id, e);
+                    Err(message)
+                },
+            }
+            counter.add(1_f64);
+        }
+        
+        if counter.eq(0_f64) {
+            let message = "PassengerWeights::avg_cost counter is a denominator and was zero".to_string();
+            Err(message)
+        }
+        
+        let avg = sum.div(counter);
+        Ok(avg)
+    }
+    
+    pub fn gradient_descent_update(self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
+        
+    }
 }
 
 #[cfg(test)]
@@ -508,32 +508,32 @@ mod tests {
         let args = vec!["first".to_string(), "2".to_string(), "3".to_string(), "fourth".to_string(), "fifth".to_string(), "sixth".to_string()];
         let conf = Config::new(&args).unwrap();
         let mut sum_strings = String::new();
-		let mut sum_nums = 0_f64;
-		
-		sum_nums.add(&conf.learning_rate);
+        let mut sum_nums = 0_f64;
+        
+        sum_nums.add(&conf.learning_rate);
         sum_nums.add(&conf.tolerance);
-		
+        
         sum_strings.push_str(&conf.training_data_filename);
-		sum_strings.push_str("-");
+        sum_strings.push_str("-");
         sum_strings.push_str(&conf.test_data_filename);
         sum_strings.push_str("-");
         sum_strings.push_str(&conf.output_filename);
-		
-		assert_eq!(&sum_nums, 5_f64);
+        
+        assert_eq!(&sum_nums, 5_f64);
         assert_eq!(&sum_strings, "fourth-fifth-sixth");
     }
-	
-	//#[test]
-	//fn when_given_new_weights_and_record_then_performing_gradient_descent_update_produces_correct_output_weights() {
+    
+    //#[test]
+    //fn when_given_new_weights_and_record_then_performing_gradient_descent_update_produces_correct_output_weights() {
     //    // Initialize weights
     //    let mut passenger_weights = PassengerWeights::new();
-	//	let mut passengers = Vec::new();
-	//	let passenger = TrainingPassenger {
-	//		
-	//	}
-	//	passenger.push(passenger);
-	//	passenger_weights.gradient_descent_update(&passengers).unwrap();
-	//	
-	//	assert_eq!(passenger_weights.get_bias(), 10.0);
-	//}
+    //    let mut passengers = Vec::new();
+    //    let passenger = TrainingPassenger {
+    //        
+    //    }
+    //    passenger.push(passenger);
+    //    passenger_weights.gradient_descent_update(&passengers).unwrap();
+    //    
+    //    assert_eq!(passenger_weights.get_bias(), 10.0);
+    //}
 }
