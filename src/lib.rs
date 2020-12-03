@@ -48,13 +48,14 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     // Initialize weights
     let mut passenger_weights = PassengerWeights::new();
 	
-	//let mut cost = passenger_weights.cost()
-    //while cost.gt(tolerance) {
-	//	match passenger_weights.gradient_descent_update(&passengers) {
-	//		Ok(_) => {},
-	//		Err(_) => {}
-	//	}
-	//}
+	let mut avg_cost = passenger_weights.avg_cost(&training_passengers);
+	
+    while avg_cost.gt(tolerance) {
+		match passenger_weights.gradient_descent_update(&passengers) {
+			Ok(_) => {},
+			Err(_) => {}
+		}
+	}
     
     Ok(())
 }
