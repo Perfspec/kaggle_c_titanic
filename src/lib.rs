@@ -56,13 +56,17 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
             
             while avg_cost.gt(tolerance) {
-                match passenger_weights.gradient_descent_update(&learning_rate, &training_passengers) {
+                match passenger_weights.gradient_descent_update(&self.learning_rate, &training_passengers) {
                     Ok(_) => {
                         num_iterations.add(1_u64);
                         match passenger_weights.avg_cost(&training_passengers) {
                             Ok(num) => {
+                                if avg_cost.lt(&num) {
+                                    self.learning_rate.div(10);
+                                    println!("Learning rate divided by 10 at iteration {}. New learning_rate: {}", &num_iterations, &self.learning_rate);
+                                }
                                 avg_cost = num;
-                                println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
+                                println!("At iteration {}, the avg_cost is {}", &num_iterations, &avg_cost);
                             },
                             Err(error) => Err(error),
                         }
@@ -197,6 +201,13 @@ impl TrainingPassenger {
         self.survived
     }
     
+    pub fn get_survived_bit(&self) -> f64 {
+        match *self.survived {
+            Survived::Yes => 1,
+            Survived::No => 0,
+        }
+    }
+    
     pub fn get_passenger_class(&self) -> &Option<PassengerClass> {
         self.passenger_class
     }
@@ -293,11 +304,8 @@ impl PassengerWeights {
     pub fn new() -> PassengerWeights {
         let mut bias = 1_f64;
         
-        //Optional floats, integers and strings only have one param instantiated for when Optional matches None.
+        //Optional floats and integers only have one param instantiated for when Optional matches None.
         //When Optional matches Some(value), then extra capacity will be reserved at runtime.
-        let mut name = Vec::new();
-        name.push(1_f64);
-        
         let mut age = Vec::new();
         age.push(1_f64);
         
@@ -307,10 +315,18 @@ impl PassengerWeights {
         let mut parents_children = Vec::new();
         parents_children.push(1_f64);
         
-        let mut ticket_id = Vec::new();
+        //Optional strings will only be differentiate by Some or None for now.
+        //In future versions, the strings may be categorized, so capacity may be reserved at runtime or a fixed number of categories. TBD
+        let mut name = Vec::with_capacity(2);
+        name.push(1_f64);
+        name.push(1_f64);
+        
+        let mut ticket_id = Vec::with_capacity(2);
+        ticket_id.push(1_f64);
         ticket_id.push(1_f64);
         
-        let mut cabin_id = Vec::new();
+        let mut cabin_id = Vec::with_capacity(2);
+        cabin_id.push(1_f64);
         cabin_id.push(1_f64);
         
         //Optional enums can be fully instantiated now, because they have a maximum number of weights.
@@ -350,11 +366,15 @@ impl PassengerWeights {
     pub fn hypothesis(&mut self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
         let mut weighted_sum = 0_f64;
         
-        match *training_passenger.get_name() {
+        weighted_sum.add(self.bias);
+        
+        match training_passenger.get_name() {
             None => {
                 match self.name.get(0) {
                     None => {
-                        Err("PassengerWeights::hypothesis: name weight 0 was unreachable")
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: name weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -364,7 +384,9 @@ impl PassengerWeights {
             Some(name) => {
                 match self.name.get(1) {
                     None => {
-                        Err("PassengerWeights::hypothesis: name weight 1 was unreachable")
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: name weight 1 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -373,11 +395,13 @@ impl PassengerWeights {
             },
         }
         
-        match *training_passenger.get_age() {
+        match training_passenger.get_age() {
             None => {
                 match self.age.get(0) {
                     None => {
-                        Err("PassengerWeights::hypothesis: age weight 0 was unreachable".to_string())
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: age weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -391,7 +415,8 @@ impl PassengerWeights {
                 }
                 match self.age.get(&age_usize) {
                     None => {
-                        let message = format!("PassengerWeights::hypothesis: age weight {} was unreachable", &age_usize);
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: age weight {} was unreachable for passenger {}", &age_usize, passenger_id);
                         Err(message)
                     },
                     Some(weight) => {
@@ -401,11 +426,13 @@ impl PassengerWeights {
             },
         }
         
-        match *training_passenger.get_siblings_spouses() {
+        match training_passenger.get_siblings_spouses() {
             None => {
                 match self.siblings_spouses.get(0) {
                     None => {
-                        Err("PassengerWeights::hypothesis: siblings_spouses weight 0 was unreachable".to_string())
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: siblings_spouses weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -419,7 +446,8 @@ impl PassengerWeights {
                 }
                 match self.siblings_spouses.get(&siblings_spouses_usize) {
                     None => {
-                        let message = format!("PassengerWeights::hypothesis: siblings_spouses weight {} was unreachable", &siblings_spouses_usize);
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: siblings_spouses weight {} was unreachable for passenger {}", &siblings_spouses_usize, passenger_id);
                         Err(message)
                     },
                     Some(weight) => {
@@ -429,11 +457,13 @@ impl PassengerWeights {
             },
         }
         
-        match *training_passenger.get_parents_children() {
+        match training_passenger.get_parents_children() {
             None => {
                 match self.parents_children.get(0) {
                     None => {
-                        Err("PassengerWeights::hypothesis: parents_children weight 0 was unreachable".to_string())
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: parents_children weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -447,7 +477,8 @@ impl PassengerWeights {
                 }
                 match self.parents_children.get(&parents_children_usize) {
                     None => {
-                        let message = format!("PassengerWeights::hypothesis: parents_children weight {} was unreachable", &parents_children_usize);
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: parents_children weight {} was unreachable for passenger {}", &parents_children_usize, passenger_id);
                         Err(message)
                     },
                     Some(weight) => {
@@ -457,11 +488,13 @@ impl PassengerWeights {
             },
         }
         
-        match *training_passenger.get_ticket_id() {
+        match training_passenger.get_ticket_id() {
             None => {
                 match self.ticket_id.get(0) {
                     None => {
-                        Err("PassengerWeights::hypothesis: ticket_id weight 0 was unreachable")
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: ticket_id weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -471,7 +504,9 @@ impl PassengerWeights {
             Some(ticket_id) => {
                 match self.ticket_id.get(1) {
                     None => {
-                        Err("PassengerWeights::hypothesis: ticket_id weight 1 was unreachable")
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: ticket_id weight 1 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -480,11 +515,13 @@ impl PassengerWeights {
             },
         }
         
-        match *training_passenger.get_cabin_id() {
+        match training_passenger.get_cabin_id() {
             None => {
                 match self.cabin_id.get(0) {
                     None => {
-                        Err("PassengerWeights::hypothesis: cabin_id weight 0 was unreachable")
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: cabin_id weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -494,7 +531,9 @@ impl PassengerWeights {
             Some(cabin_id) => {
                 match self.cabin_id.get(1) {
                     None => {
-                        Err("PassengerWeights::hypothesis: cabin_id weight 1 was unreachable")
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: cabin_id weight 1 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -503,11 +542,13 @@ impl PassengerWeights {
             },
         }
         
-        match *training_passenger.get_passenger_class() {
+        match training_passenger.get_passenger_class() {
             None => {
                 match self.passenger_class.get(0) {
                     None => {
-                        Err("PassengerWeights::hypothesis: passenger_class weight 0 was unreachable")
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: passenger_class weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -519,7 +560,9 @@ impl PassengerWeights {
                     PassengerClass::First => {
                         match self.passenger_class.get(1) {
                             None => {
-                                Err("PassengerWeights::hypothesis: passenger_class weight 1 was unreachable")
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::hypothesis: passenger_class weight 1 was unreachable for passenger {}", passenger_id);
+                                Err(message)
                             },
                             Some(weight) => {
                                 weighted_sum.add(weight);
@@ -529,7 +572,9 @@ impl PassengerWeights {
                     PassengerClass::Second => {
                         match self.passenger_class.get(2) {
                             None => {
-                                Err("PassengerWeights::hypothesis: passenger_class weight 2 was unreachable")
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::hypothesis: passenger_class weight 2 was unreachable for passenger {}", passenger_id);
+                                Err(message)
                             },
                             Some(weight) => {
                                 weighted_sum.add(weight);
@@ -539,7 +584,9 @@ impl PassengerWeights {
                     PassengerClass::Third => {
                         match self.passenger_class.get(3) {
                             None => {
-                                Err("PassengerWeights::hypothesis: passenger_class weight 3 was unreachable")
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::hypothesis: passenger_class weight 3 was unreachable for passenger {}", passenger_id);
+                                Err(message)
                             },
                             Some(weight) => {
                                 weighted_sum.add(weight);
@@ -550,11 +597,13 @@ impl PassengerWeights {
             },
         }
         
-        match *training_passenger.get_sex() {
+        match training_passenger.get_sex() {
             None => {
                 match self.sex.get(0) {
                     None => {
-                        Err("PassengerWeights::hypothesis: sex weight 0 was unreachable")
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: sex weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -566,7 +615,9 @@ impl PassengerWeights {
                     Sex::Female => {
                         match self.sex.get(1) {
                             None => {
-                                Err("PassengerWeights::hypothesis: sex weight 1 was unreachable")
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::hypothesis: sex weight 1 was unreachable for passenger {}", passenger_id);
+                                Err(message)
                             },
                             Some(weight) => {
                                 weighted_sum.add(weight);
@@ -576,7 +627,9 @@ impl PassengerWeights {
                     Sex::Male => {
                         match self.sex.get(2) {
                             None => {
-                                Err("PassengerWeights::hypothesis: sex weight 2 was unreachable")
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::hypothesis: sex weight 2 was unreachable for passenger {}", passenger_id);
+                                Err(message)
                             },
                             Some(weight) => {
                                 weighted_sum.add(weight);
@@ -587,11 +640,13 @@ impl PassengerWeights {
             },
         }
         
-        match *training_passenger.get_port_of_embarkation() {
+        match training_passenger.get_port_of_embarkation() {
             None => {
                 match self.port_of_embarkation.get(0) {
                     None => {
-                        Err("PassengerWeights::hypothesis: port_of_embarkation weight 0 was unreachable")
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: port_of_embarkation weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
                     },
                     Some(weight) => {
                         weighted_sum.add(weight);
@@ -603,7 +658,9 @@ impl PassengerWeights {
                     PortOfEmbarkation::Cherbourg => {
                         match self.port_of_embarkation.get(1) {
                             None => {
-                                Err("PassengerWeights::hypothesis: port_of_embarkation weight 1 was unreachable")
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::hypothesis: port_of_embarkation weight 1 was unreachable for passenger {}", passenger_id);
+                                Err(message)
                             },
                             Some(weight) => {
                                 weighted_sum.add(weight);
@@ -613,7 +670,9 @@ impl PassengerWeights {
                     PortOfEmbarkation::Southampton => {
                         match self.port_of_embarkation.get(2) {
                             None => {
-                                Err("PassengerWeights::hypothesis: port_of_embarkation weight 2 was unreachable")
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::hypothesis: port_of_embarkation weight 2 was unreachable for passenger {}", passenger_id);
+                                Err(message)
                             },
                             Some(weight) => {
                                 weighted_sum.add(weight);
@@ -623,7 +682,9 @@ impl PassengerWeights {
                     PortOfEmbarkation::Queenstown => {
                         match self.port_of_embarkation.get(3) {
                             None => {
-                                Err("PassengerWeights::hypothesis: port_of_embarkation weight 3 was unreachable")
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::hypothesis: port_of_embarkation weight 3 was unreachable for passenger {}", passenger_id);
+                                Err(message)
                             },
                             Some(weight) => {
                                 weighted_sum.add(weight);
@@ -642,7 +703,7 @@ impl PassengerWeights {
     pub fn cost(&mut self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
         let mut cost = 0_f64;
         
-        match *training_passenger.get_survived() {
+        match training_passenger.get_survived() {
             Survived::Yes => {
                 match self.hypothesis(training_passenger) {
                     Ok(hypothesis) => {
@@ -668,12 +729,12 @@ impl PassengerWeights {
         let mut counter = 0_f64;
         
         for training_passenger in *training_passengers {
-            match *self.cost(&training_passenger) {
+            match self.cost(&training_passenger) {
                 Ok(cost) => {
                     sum.add(cost);
                 },
                 Err(e) => {
-                    let passenger_id = *(training_passenger.get_passenger_id());
+                    let passenger_id = training_passenger.get_passenger_id();
                     let message = format!("PassengerWeights::avg_cost was unable to calculate cost for passenger_id: {}. {}", passenger_id, e);
                     Err(message)
                 },
@@ -691,7 +752,369 @@ impl PassengerWeights {
     }
     
     pub fn gradient_descent_update(&mut self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
+        for training_passenger in *training_passengers {
+            self.gradient_descent_update(learning_rate, training_passenger)?;
+        }
+    }
+    
+    fn diff_hypothesis(&mut self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
+        let mut diff = 0_f64;
         
+        match *training_passenger.get_survived() {
+            Survived::Yes => {
+                match self.hypothesis(training_passenger) {
+                    Ok(hypothesis) => {
+                        diff.add(hypothesis.add(-1));
+                    },
+                    Err(error) => Err(error),
+                }
+            },
+            Survived::No => {
+                match self.hypothesis(training_passenger) {
+                    Ok(hypothesis) => {
+                        diff.add(hypothesis);
+                    },
+                    Err(error) => Err(error),
+                }
+            },
+        }
+        Ok(-diff)
+    }
+    
+    fn gradient_descent_update(&mut self, learning_rate: &f64, training_passenger: &TrainingPassenger) -> Result<(), String> {
+        let diff = self.diff_hypothesis(training_passenger)?.mul(training_passenger.get_survived_bit()).mul(-1).mul(learning_rate);
+        self.add(&diff, training_passenger)?;
+    }
+    
+    fn add(&mut self, diff: &f64, training_passenger: &TrainingPassenger) -> Result<(), String> {
+        self.bias.add(diff);
+        
+        match training_passenger.get_name() {
+            None => {
+                match self.name.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: name weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(name) => {
+                match self.name.get(1) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: name weight 1 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_age() {
+            None => {
+                match self.age.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: age weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(age) => {
+                let age_usize = unsafe { age.to_int_unchecked::<usize>() };
+                if (self.age.len()).lt(&age_usize.add(1)) {
+                    self.age.resize(&age_usize.add(1), 1_f64);
+                }
+                match self.age.get(&age_usize) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: age weight {} was unreachable for passenger {}", &age_usize, passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight).mul(age.trunc()));
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_siblings_spouses() {
+            None => {
+                match self.siblings_spouses.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: siblings_spouses weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(siblings_spouses) => {
+                let siblings_spouses_usize = unsafe { siblings_spouses.to_int_unchecked::<usize>() };
+                if (self.siblings_spouses.len()).lt(&siblings_spouses_usize.add(1)) {
+                    self.siblings_spouses.resize(&siblings_spouses_usize.add(1), 1_f64);
+                }
+                match self.siblings_spouses.get(&siblings_spouses_usize) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: siblings_spouses weight {} was unreachable for passenger {}", &siblings_spouses_usize, passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight).mul(siblings_spouses.trunc()));
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_parents_children() {
+            None => {
+                match self.parents_children.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: parents_children weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(parents_children) => {
+                let parents_children_usize = unsafe { parents_children.to_int_unchecked::<usize>() };
+                if (self.parents_children.len()).lt(&parents_children_usize.add(1)) {
+                    self.parents_children.resize(&parents_children_usize.add(1), 1_f64);
+                }
+                match self.parents_children.get(&parents_children_usize) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: parents_children weight {} was unreachable for passenger {}", &parents_children_usize, passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight).mul(parents_children.trunc()));
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_ticket_id() {
+            None => {
+                match self.ticket_id.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: ticket_id weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(ticket_id) => {
+                match self.ticket_id.get(1) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: ticket_id weight 1 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_cabin_id() {
+            None => {
+                match self.cabin_id.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: cabin_id weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(cabin_id) => {
+                match self.cabin_id.get(1) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: cabin_id weight 1 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_passenger_class() {
+            None => {
+                match self.passenger_class.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: passenger_class weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(passenger_class) => {
+                match passenger_class {
+                    PassengerClass::First => {
+                        match self.passenger_class.get(1) {
+                            None => {
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::add: passenger_class weight 1 was unreachable for passenger {}", passenger_id);
+                                Err(message)
+                            },
+                            Some(weight) => {
+                                weight.add(diff.mul(&weight));
+                            },
+                        }
+                    },
+                    PassengerClass::Second => {
+                        match self.passenger_class.get(2) {
+                            None => {
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::add: passenger_class weight 2 was unreachable for passenger {}", passenger_id);
+                                Err(message)
+                            },
+                            Some(weight) => {
+                                weight.add(diff.mul(&weight));
+                            },
+                        }
+                    },
+                    PassengerClass::Third => {
+                        match self.passenger_class.get(3) {
+                            None => {
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::add: passenger_class weight 3 was unreachable for passenger {}", passenger_id);
+                                Err(message)
+                            },
+                            Some(weight) => {
+                                weight.add(diff.mul(&weight));
+                            },
+                        }
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_sex() {
+            None => {
+                match self.sex.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: sex weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(sex) => {
+                match sex {
+                    Sex::Female => {
+                        match self.sex.get(1) {
+                            None => {
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::add: sex weight 1 was unreachable for passenger {}", passenger_id);
+                                Err(message)
+                            },
+                            Some(weight) => {
+                                weight.add(diff.mul(&weight));
+                            },
+                        }
+                    },
+                    Sex::Male => {
+                        match self.sex.get(2) {
+                            None => {
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::add: sex weight 2 was unreachable for passenger {}", passenger_id);
+                                Err(message)
+                            },
+                            Some(weight) => {
+                                weight.add(diff.mul(&weight));
+                            },
+                        }
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_port_of_embarkation() {
+            None => {
+                match self.port_of_embarkation.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: port_of_embarkation weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(port_of_embarkation) => {
+                match port_of_embarkation {
+                    PortOfEmbarkation::Cherbourg => {
+                        match self.port_of_embarkation.get(1) {
+                            None => {
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::add: port_of_embarkation weight 1 was unreachable for passenger {}", passenger_id);
+                                Err(message)
+                            },
+                            Some(weight) => {
+                                weight.add(diff.mul(&weight));
+                            },
+                        }
+                    },
+                    PortOfEmbarkation::Southampton => {
+                        match self.port_of_embarkation.get(2) {
+                            None => {
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::add: port_of_embarkation weight 2 was unreachable for passenger {}", passenger_id);
+                                Err(message)
+                            },
+                            Some(weight) => {
+                                weight.add(diff.mul(&weight));
+                            },
+                        }
+                    },
+                    PortOfEmbarkation::Queenstown => {
+                        match self.port_of_embarkation.get(3) {
+                            None => {
+                                let passenger_id = training_passenger.get_passenger_id();
+                                let message = format!("PassengerWeights::add: port_of_embarkation weight 3 was unreachable for passenger {}", passenger_id);
+                                Err(message)
+                            },
+                            Some(weight) => {
+                                weight.add(diff.mul(&weight));
+                            },
+                        }
+                    },
+                }
+            },
+        }
     }
 }
 
