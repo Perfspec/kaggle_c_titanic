@@ -1,7 +1,6 @@
 use std::error::Error;
 use csv::Reader;
 use serde::Deserialize;
-use std::fmt;
 
 pub struct Config {
     pub learning_rate: f64,
@@ -787,7 +786,8 @@ impl PassengerWeights {
     
     pub fn gradient_descent_update(&mut self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
         for training_passenger in *training_passengers {
-            self.gradient_descent_update(learning_rate, training_passenger)?;
+            let diff = self.diff_hypothesis(training_passenger)?.mul(training_passenger.get_survived_bit()).mul(-1).mul(learning_rate);
+            self.add(&diff, training_passenger)?;
         }
     }
     
@@ -813,11 +813,6 @@ impl PassengerWeights {
             },
         }
         Ok(-diff)
-    }
-    
-    fn gradient_descent_update(&mut self, learning_rate: &f64, training_passenger: &TrainingPassenger) -> Result<(), String> {
-        let diff = self.diff_hypothesis(training_passenger)?.mul(training_passenger.get_survived_bit()).mul(-1).mul(learning_rate);
-        self.add(&diff, training_passenger)?;
     }
     
     fn add(&mut self, diff: &f64, training_passenger: &TrainingPassenger) -> Result<(), String> {
