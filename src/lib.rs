@@ -35,62 +35,62 @@ impl Config {
 
 pub fn run(config: Config) -> Result<(), String> {
     //Read training_data into vector of training_passengers, which will be reused many times.
-	match Reader::from_path(config.training_data_filename) {
-		Ok(training_data) => {
-			let mut training_passengers = Vec::new();
+    match Reader::from_path(config.training_data_filename) {
+        Ok(training_data) => {
+            let mut training_passengers = Vec::new();
     
-			for result in training_data.deserialize() {
-				match result {
-					Ok(result) => {
-						let mut training_passenger: TrainingPassenger = result;
-						training_passengers.push(training_passenger);
-					},
-					Err(_) => return Err("Failed to deserialize TrainingPassenger".to_string()),
-				}
-				
-			}
-			
-			// Initialize weights
-			let mut passenger_weights = PassengerWeights::new();
-			
-			let mut avg_cost = 0_f64;
-			let mut num_iterations = 0_u64;
+            for result in training_data.deserialize() {
+                match result {
+                    Ok(result) => {
+                        let mut training_passenger: TrainingPassenger = result;
+                        training_passengers.push(training_passenger);
+                    },
+                    Err(_) => return Err("Failed to deserialize TrainingPassenger".to_string()),
+                }
+                
+            }
+            
+            // Initialize weights
+            let mut passenger_weights = PassengerWeights::new();
+            
+            let mut avg_cost = 0_f64;
+            let mut num_iterations = 0_u64;
 
-			match passenger_weights.avg_cost(&training_passengers) {
-				Ok(num) => {
-					avg_cost = num;
-					println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
-					
-					while avg_cost.gt(&config.tolerance) {
-						match passenger_weights.gradient_descent_update(&config.learning_rate, &training_passengers) {
-							Ok(_) => {
-								num_iterations.add(1_u64);
-								match passenger_weights.avg_cost(&training_passengers) {
-									Ok(num) => {
-										if avg_cost.lt(&num) {
-											config.learning_rate.div(10_f64);
-											println!("Learning rate divided by 10 at iteration {}. New learning_rate: {}", &num_iterations, &config.learning_rate);
-										}
-										avg_cost = num;
-										println!("At iteration {}, the avg_cost is {}", &num_iterations, &avg_cost);
-									},
-									Err(error) => return Err(error),
-								}
-							},
-							Err(error) => return Err(error),
-						}
-					}
-				},
-				Err(error) => return Err(error),
-			}
-				
-			Ok(())
-		},
-		Err(_) => {
-			let message = format!("Failed to read from {}", config.training_data_filename);
-			return Err(message)
-		},
-	}
+            match passenger_weights.avg_cost(&training_passengers) {
+                Ok(num) => {
+                    avg_cost = num;
+                    println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
+                    
+                    while avg_cost.gt(&config.tolerance) {
+                        match passenger_weights.gradient_descent_update(&config.learning_rate, &training_passengers) {
+                            Ok(_) => {
+                                num_iterations.add(1_u64);
+                                match passenger_weights.avg_cost(&training_passengers) {
+                                    Ok(num) => {
+                                        if avg_cost.lt(&num) {
+                                            config.learning_rate.div(10_f64);
+                                            println!("Learning rate divided by 10 at iteration {}. New learning_rate: {}", &num_iterations, &config.learning_rate);
+                                        }
+                                        avg_cost = num;
+                                        println!("At iteration {}, the avg_cost is {}", &num_iterations, &avg_cost);
+                                    },
+                                    Err(error) => return Err(error),
+                                }
+                            },
+                            Err(error) => return Err(error),
+                        }
+                    }
+                },
+                Err(error) => return Err(error),
+            }
+                
+            Ok(())
+        },
+        Err(_) => {
+            let message = format!("Failed to read from {}", config.training_data_filename);
+            return Err(message)
+        },
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -458,14 +458,15 @@ impl PassengerWeights {
                 if (self.siblings_spouses.len()).lt(&siblings_spouses.add(1_usize)) {
                     self.siblings_spouses.resize(siblings_spouses.add(1_usize), 1_f64);
                 }
-                match self.siblings_spouses.get(siblings_spouses) {
+                match self.siblings_spouses.get(*siblings_spouses) {
                     None => {
                         let passenger_id = training_passenger.get_passenger_id();
                         let message = format!("PassengerWeights::hypothesis: siblings_spouses weight {} was unreachable for passenger {}", siblings_spouses, passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
-                        weighted_sum.add(weight.mul(siblings_spouses.into()));
+                        let cast: f64 = siblings_spouses.into();
+                        weighted_sum.add(weight.mul(cast));
                     },
                 }
             },
@@ -495,7 +496,8 @@ impl PassengerWeights {
                         return Err(message)
                     },
                     Some(weight) => {
-                        weighted_sum.add(weight.mul(parents_children.into()));
+                        let cast: f64 = parents_children.into();
+                        weighted_sum.add(weight.mul(cast));
                     },
                 }
             },
@@ -797,14 +799,14 @@ impl PassengerWeights {
     
     pub fn gradient_descent_update(&mut self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
         for training_passenger in *training_passengers {
-			match self.diff_hypothesis(&training_passenger) {
-				Ok(diff) => {
-					self.add(&(diff.mul(training_passenger.get_survived_bit()).mul(-1_f64).mul(learning_rate)), &training_passenger)?;
-				},
-				Err(error) => return Err(error),
-			}
+            match self.diff_hypothesis(&training_passenger) {
+                Ok(diff) => {
+                    self.add(&(diff.mul(training_passenger.get_survived_bit()).mul(-1_f64).mul(learning_rate)), &training_passenger)?;
+                },
+                Err(error) => return Err(error),
+            }
         }
-		Ok(())
+        Ok(())
     }
     
     fn diff_hypothesis(&mut self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
@@ -909,14 +911,15 @@ impl PassengerWeights {
                 if (self.siblings_spouses.len()).lt(&siblings_spouses.add(1_usize)) {
                     self.siblings_spouses.resize(siblings_spouses.add(1_usize), 1_f64);
                 }
-                match self.siblings_spouses.get(siblings_spouses) {
+                match self.siblings_spouses.get(*siblings_spouses) {
                     None => {
                         let passenger_id = training_passenger.get_passenger_id();
                         let message = format!("PassengerWeights::add: siblings_spouses weight {} was unreachable for passenger {}", siblings_spouses, passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
-                        weight.add(diff.mul(weight).mul(siblings_spouses.into()));
+                        let cast: f64 = siblings_spouses.into();
+                        weight.add(diff.mul(weight).mul(cast));
                     },
                 }
             },
@@ -946,7 +949,8 @@ impl PassengerWeights {
                         return Err(message)
                     },
                     Some(weight) => {
-                        weight.add(diff.mul(weight).mul(parents_children.into()));
+                        let cast: f64 = parents_children.into();
+                        weight.add(diff.mul(weight).mul(cast));
                     },
                 }
             },
