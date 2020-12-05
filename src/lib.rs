@@ -35,8 +35,8 @@ impl Config {
 
 pub fn run(config: Config) -> Result<(), String> {
     //Read training_data into vector of training_passengers, which will be reused many times.
-    match Reader::from_path(config.training_data_filename) {
-        Ok(training_data) => {
+    match Reader::from_path(&config.training_data_filename) {
+        Ok(mut training_data) => {
             let mut training_passengers = Vec::new();
     
             for result in training_data.deserialize() {
@@ -87,7 +87,7 @@ pub fn run(config: Config) -> Result<(), String> {
             Ok(())
         },
         Err(_) => {
-            let message = format!("Failed to read from {}", config.training_data_filename);
+            let message = format!("Failed to read from {}", &config.training_data_filename);
             return Err(message)
         },
     }
@@ -465,8 +465,7 @@ impl PassengerWeights {
                         return Err(message)
                     },
                     Some(weight) => {
-                        let cast: f64 = siblings_spouses.into();
-                        weighted_sum.add(weight.mul(cast));
+                        weighted_sum.add(weight.mul(PassengerWeights::quick_convert(siblings_spouses)));
                     },
                 }
             },
@@ -496,8 +495,7 @@ impl PassengerWeights {
                         return Err(message)
                     },
                     Some(weight) => {
-                        let cast: f64 = parents_children.into();
-                        weighted_sum.add(weight.mul(cast));
+                        weighted_sum.add(weight.mul(PassengerWeights::quick_convert(parents_children)));
                     },
                 }
             },
@@ -774,7 +772,7 @@ impl PassengerWeights {
         let mut sum = 0_f64;
         let mut counter = 0_f64;
         
-        for training_passenger in *training_passengers {
+        for training_passenger in training_passengers {
             match self.cost(&training_passenger) {
                 Ok(cost) => {
                     sum.add(cost);
@@ -798,7 +796,7 @@ impl PassengerWeights {
     }
     
     pub fn gradient_descent_update(&mut self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
-        for training_passenger in *training_passengers {
+        for training_passenger in training_passengers {
             match self.diff_hypothesis(&training_passenger) {
                 Ok(diff) => {
                     self.add(&(diff.mul(training_passenger.get_survived_bit()).mul(-1_f64).mul(learning_rate)), &training_passenger)?;
@@ -918,8 +916,7 @@ impl PassengerWeights {
                         return Err(message)
                     },
                     Some(weight) => {
-                        let cast: f64 = siblings_spouses.into();
-                        weight.add(diff.mul(weight).mul(cast));
+                        weight.add(diff.mul(weight).mul(PassengerWeights::quick_convert(siblings_spouses)));
                     },
                 }
             },
@@ -949,8 +946,7 @@ impl PassengerWeights {
                         return Err(message)
                     },
                     Some(weight) => {
-                        let cast: f64 = parents_children.into();
-                        weight.add(diff.mul(weight).mul(cast));
+                        weight.add(diff.mul(weight).mul(PassengerWeights::quick_convert(parents_children)));
                     },
                 }
             },
@@ -1195,6 +1191,14 @@ impl PassengerWeights {
         }
 
         Ok(())
+    }
+    
+    fn quick_convert(num: &usize) -> f64 {
+        let mut result = 0_f64;
+        for number in 1..*num {
+            result.add(1_f64);
+        }
+        result
     }
 }
 
