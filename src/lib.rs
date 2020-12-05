@@ -55,15 +55,15 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             avg_cost = num;
             println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
             
-            while avg_cost.gt(tolerance) {
-                match passenger_weights.gradient_descent_update(&self.learning_rate, &training_passengers) {
+            while avg_cost.gt(self.tolerance) {
+                match passenger_weights.gradient_descent_update(&config.learning_rate, &training_passengers) {
                     Ok(_) => {
                         num_iterations.add(1_u64);
                         match passenger_weights.avg_cost(&training_passengers) {
                             Ok(num) => {
                                 if avg_cost.lt(&num) {
-                                    self.learning_rate.div(10);
-                                    println!("Learning rate divided by 10 at iteration {}. New learning_rate: {}", &num_iterations, &self.learning_rate);
+                                    config.learning_rate.div(10);
+                                    println!("Learning rate divided by 10 at iteration {}. New learning_rate: {}", &num_iterations, &config.learning_rate);
                                 }
                                 avg_cost = num;
                                 println!("At iteration {}, the avg_cost is {}", &num_iterations, &avg_cost);
@@ -315,6 +315,9 @@ impl PassengerWeights {
         let mut parents_children = Vec::new();
         parents_children.push(1_f64);
         
+        let mut fare = Vec::new();
+        fare.push(1_f64);
+        
         //Optional strings will only be differentiate by Some or None for now.
         //In future versions, the strings may be categorized, so capacity may be reserved at runtime or a fixed number of categories. TBD
         let mut name = Vec::with_capacity(2);
@@ -483,6 +486,37 @@ impl PassengerWeights {
                     },
                     Some(weight) => {
                         weighted_sum.add(weight.mul(parents_children.trunc()));
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_fare() {
+            None => {
+                match self.fare.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: fare weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(fare) => {
+                let fare_usize = unsafe { fare.to_int_unchecked::<usize>() };
+                if (self.fare.len()).lt(&fare_usize.add(1)) {
+                    self.fare.resize(&fare_usize.add(1), 1_f64);
+                }
+                match self.fare.get(&fare_usize) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::hypothesis: fare weight {} was unreachable for passenger {}", &fare_usize, passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight.mul(fare.trunc()));
                     },
                 }
             },
@@ -904,6 +938,37 @@ impl PassengerWeights {
                     },
                     Some(weight) => {
                         weight.add(diff.mul(&weight).mul(parents_children.trunc()));
+                    },
+                }
+            },
+        }
+        
+        match training_passenger.get_fare() {
+            None => {
+                match self.fare.get(0) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: fare weight 0 was unreachable for passenger {}", passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight));
+                    },
+                }
+            },
+            Some(fare) => {
+                let fare_usize = unsafe { fare.to_int_unchecked::<usize>() };
+                if (self.fare.len()).lt(&fare_usize.add(1)) {
+                    self.fare.resize(&fare_usize.add(1), 1_f64);
+                }
+                match self.fare.get(&fare_usize) {
+                    None => {
+                        let passenger_id = training_passenger.get_passenger_id();
+                        let message = format!("PassengerWeights::add: fare weight {} was unreachable for passenger {}", &fare_usize, passenger_id);
+                        Err(message)
+                    },
+                    Some(weight) => {
+                        weight.add(diff.mul(&weight).mul(fare.trunc()));
                     },
                 }
             },
