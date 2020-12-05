@@ -1,7 +1,6 @@
 use std::error::Error;
 use csv::Reader;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::fmt;
 
 pub struct Config {
