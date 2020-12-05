@@ -640,7 +640,7 @@ impl PassengerWeights {
         Ok(hypothesis.div(weighted_sum.exp().add(1_f64)))
     }
     
-    pub fn cost(&self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
+    pub fn cost(&mut self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
         let mut cost = 0_f64;
         
         match *training_passenger.get_survived() {
@@ -664,7 +664,7 @@ impl PassengerWeights {
         Ok(-cost)
     }
     
-    pub fn avg_cost(&self, training_passengers: &Vec<TrainingPassenger>) -> Result<f64, String> {
+    pub fn avg_cost(&mut self, training_passengers: &Vec<TrainingPassenger>) -> Result<f64, String> {
         let mut sum = 0_f64;
         let mut counter = 0_f64;
         
@@ -691,7 +691,7 @@ impl PassengerWeights {
         Ok(avg)
     }
     
-    pub fn gradient_descent_update(self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
+    pub fn gradient_descent_update(&mut self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
         
     }
 }
