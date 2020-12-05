@@ -16,12 +16,12 @@ fn main() {
 		"data/test.csv".to_string(),
 		"output.csv".to_string()];
 
-    let config = Config::new(&args).unwrap_or_else(|err| {
+    let mut config = Config::new(&args).unwrap_or_else(|err| {
         eprintln!("Problem parsing arguments: {}", err);
         process::exit(1);
     });
 	
-	if let Err(e) = kaggle_c_titanic::run(config) {
+	if let Err(e) = kaggle_c_titanic::run(&mut config) {
         eprintln!("Application error: {}", e);
 
         process::exit(1);
