@@ -348,8 +348,161 @@ impl PassengerWeights {
         }
     }
     
-    pub fn hypothesis(&self, training_passenger: &TrainingPassenger) -> Result<f64, &'static str> {
+    pub fn hypothesis(&mut self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
         let mut weighted_sum = 0_f64;
+		
+		match *training_passenger.get_name() {
+			None => {
+                match self.name.get(0) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: name weight 0 was unreachable")
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+			Some(name) => {
+                match self.name.get(1) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: name weight 1 was unreachable")
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+		}
+		
+		match *training_passenger.get_age() {
+			None => {
+                match self.age.get(0) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: age weight 0 was unreachable".to_string())
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+			Some(age) => {
+				let age_usize = unsafe { age.to_int_unchecked::<usize>() };
+				if (self.age.len()).lt(&age_usize.add(1)) {
+					self.age.resize(&age_usize.add(1), 1_f64);
+				}
+				match self.age.get(&age_usize) {
+					None => {
+						let message = format!("PassengerWeights::hypothesis: age weight {} was unreachable", &age_usize);
+						Err(message)
+					},
+					Some(weight) => {
+						weighted_sum.add(weight.mul(age.trunc()));
+					},
+				}
+            },
+		}
+		
+		match *training_passenger.get_siblings_spouses() {
+			None => {
+                match self.siblings_spouses.get(0) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: siblings_spouses weight 0 was unreachable".to_string())
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+			Some(siblings_spouses) => {
+				let siblings_spouses_usize = unsafe { siblings_spouses.to_int_unchecked::<usize>() };
+				if (self.siblings_spouses.len()).lt(&siblings_spouses_usize.add(1)) {
+					self.siblings_spouses.resize(&siblings_spouses_usize.add(1), 1_f64);
+				}
+				match self.siblings_spouses.get(&siblings_spouses_usize) {
+					None => {
+						let message = format!("PassengerWeights::hypothesis: siblings_spouses weight {} was unreachable", &siblings_spouses_usize);
+						Err(message)
+					},
+					Some(weight) => {
+						weighted_sum.add(weight.mul(siblings_spouses.trunc()));
+					},
+				}
+            },
+		}
+        
+		match *training_passenger.get_parents_children() {
+			None => {
+                match self.parents_children.get(0) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: parents_children weight 0 was unreachable".to_string())
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+			Some(parents_children) => {
+				let parents_children_usize = unsafe { parents_children.to_int_unchecked::<usize>() };
+				if (self.parents_children.len()).lt(&parents_children_usize.add(1)) {
+					self.parents_children.resize(&parents_children_usize.add(1), 1_f64);
+				}
+				match self.parents_children.get(&parents_children_usize) {
+					None => {
+						let message = format!("PassengerWeights::hypothesis: parents_children weight {} was unreachable", &parents_children_usize);
+						Err(message)
+					},
+					Some(weight) => {
+						weighted_sum.add(weight.mul(parents_children.trunc()));
+					},
+				}
+            },
+		}
+		
+		match *training_passenger.get_ticket_id() {
+			None => {
+                match self.ticket_id.get(0) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: ticket_id weight 0 was unreachable")
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+			Some(ticket_id) => {
+                match self.ticket_id.get(1) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: ticket_id weight 1 was unreachable")
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+		}
+		
+		match *training_passenger.get_cabin_id() {
+			None => {
+                match self.cabin_id.get(0) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: cabin_id weight 0 was unreachable")
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+			Some(cabin_id) => {
+                match self.cabin_id.get(1) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: cabin_id weight 1 was unreachable")
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+		}
         
         match *training_passenger.get_passenger_class() {
             None => {
@@ -434,9 +587,60 @@ impl PassengerWeights {
                 }
             },
         }
+        
+        match *training_passenger.get_port_of_embarkation() {
+            None => {
+                match self.port_of_embarkation.get(0) {
+                    None => {
+                        Err("PassengerWeights::hypothesis: port_of_embarkation weight 0 was unreachable")
+                    },
+                    Some(weight) => {
+                        weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(port_of_embarkation) => {
+                match port_of_embarkation {
+                    PortOfEmbarkation::Cherbourg => {
+                        match self.port_of_embarkation.get(1) {
+                            None => {
+                                Err("PassengerWeights::hypothesis: port_of_embarkation weight 1 was unreachable")
+                            },
+                            Some(weight) => {
+                                weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    PortOfEmbarkation::Southampton => {
+                        match self.port_of_embarkation.get(2) {
+                            None => {
+                                Err("PassengerWeights::hypothesis: port_of_embarkation weight 2 was unreachable")
+                            },
+                            Some(weight) => {
+                                weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    PortOfEmbarkation::Queenstown => {
+                        match self.port_of_embarkation.get(3) {
+                            None => {
+                                Err("PassengerWeights::hypothesis: port_of_embarkation weight 3 was unreachable")
+                            },
+                            Some(weight) => {
+                                weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                }
+            },
+        }
+
+        let mut hypothesis = 1_f64;
+
+        Ok(hypothesis.div(weighted_sum.exp().add(1_f64)))
     }
     
-    pub fn cost(&self, training_passenger: &TrainingPassenger) -> Result<f64, &'static str> {
+    pub fn cost(&self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
         let mut cost = 0_f64;
         
         match *training_passenger.get_survived() {
