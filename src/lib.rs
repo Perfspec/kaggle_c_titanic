@@ -86,22 +86,19 @@ pub fn run(config: &mut Config) -> Result<(), String> {
                 Ok(num) => {
                     let mut avg_cost = num;
                     let mut num_iterations = 0_u64;
-                    println!("passenger_weights={:#?}", &passenger_weights);
                     println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
                     
-                //    while avg_cost.gt(config.get_tolerance()) {
-                    for _iteration in 0..10 {
+                    while avg_cost.gt(config.get_tolerance()) {
                         match passenger_weights.gradient_descent_update(config.get_learning_rate(), &training_passengers) {
                             Ok(_) => {
                                 num_iterations = num_iterations.add(1_u64);
                                 match passenger_weights.avg_cost(&training_passengers) {
                                     Ok(num) => {
-                //                        if avg_cost.lt(&num) {
-                //                            &mut config.set_learning_rate(config.get_learning_rate().div(100_f64));
-                //                            println!("Learning rate divided by 10 at iteration {}. New learning_rate: {}", &num_iterations, config.get_learning_rate());
-                //                        }
+                                        if avg_cost.lt(&num) {
+                                            &mut config.set_learning_rate(config.get_learning_rate().div(100_f64));
+                                            println!("Learning rate divided by 10 at iteration {}. New learning_rate: {}", &num_iterations, config.get_learning_rate());
+                                        }
                                         avg_cost = num;
-                                        println!("passenger_weights={:#?}", &passenger_weights);
                                         println!("At iteration {}, the avg_cost is {}", &num_iterations, &avg_cost);
                                     },
                                     Err(error) => return Err(error),
