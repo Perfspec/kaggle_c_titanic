@@ -3,6 +3,9 @@ use serde::Deserialize;
 use std::ops::{Add, Mul, Div};
 use std::collections::HashMap;
 
+#[macro_use]
+extern crate approx;
+
 pub struct Config {
     learning_rate: f64,
     tolerance: f64,
@@ -85,7 +88,8 @@ pub fn run(config: &mut Config) -> Result<(), String> {
                     let mut num_iterations = 0_u64;
                     println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
                     
-                    while avg_cost.gt(config.get_tolerance()) {
+                //    while avg_cost.gt(config.get_tolerance()) {
+					for _iteration in 0..10 {
                         match passenger_weights.gradient_descent_update(config.get_learning_rate(), &training_passengers) {
                             Ok(_) => {
                                 num_iterations = num_iterations.add(1_u64);
@@ -400,9 +404,9 @@ impl PassengerWeights {
     
     pub fn hypothesis(&self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
         let mut weighted_sum = 0_f64;
-        
-        weighted_sum = weighted_sum.add(self.bias);
-        
+		
+		weighted_sum = weighted_sum.add(self.bias);
+		
         match training_passenger.get_name() {
             None => {
                 match self.name.get(&0) {
@@ -429,8 +433,8 @@ impl PassengerWeights {
                 }
             },
         }
-        
-        match training_passenger.get_age() {
+		
+		match training_passenger.get_age() {
             None => {
                 match self.age.get(&0) {
                     None => {
@@ -456,8 +460,8 @@ impl PassengerWeights {
                 }
             },
         }
-        
-        match training_passenger.get_siblings_spouses() {
+		
+		match training_passenger.get_siblings_spouses() {
             None => {
                 match self.siblings_spouses.get(&0) {
                     None => {
@@ -478,13 +482,13 @@ impl PassengerWeights {
                         return Err(message)
                     },
                     Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight.mul(PassengerWeights::quick_convert(siblings_spouses)));
+						weighted_sum = weighted_sum.add(weight.mul(PassengerWeights::quick_convert(siblings_spouses)));
                     },
                 }
             },
         }
-        
-        match training_passenger.get_parents_children() {
+		
+		match training_passenger.get_parents_children() {
             None => {
                 match self.parents_children.get(&0) {
                     None => {
@@ -510,8 +514,8 @@ impl PassengerWeights {
                 }
             },
         }
-        
-        match training_passenger.get_fare() {
+		
+		match training_passenger.get_fare() {
             None => {
                 match self.fare.get(&0) {
                     None => {
@@ -537,8 +541,8 @@ impl PassengerWeights {
                 }
             },
         }
-        
-        match training_passenger.get_ticket_id() {
+		
+		match training_passenger.get_ticket_id() {
             None => {
                 match self.ticket_id.get(&0) {
                     None => {
@@ -564,8 +568,8 @@ impl PassengerWeights {
                 }
             },
         }
-        
-        match training_passenger.get_cabin_id() {
+		
+		match training_passenger.get_cabin_id() {
             None => {
                 match self.cabin_id.get(&0) {
                     None => {
@@ -591,8 +595,8 @@ impl PassengerWeights {
                 }
             },
         }
-        
-        match training_passenger.get_passenger_class() {
+		
+		match training_passenger.get_passenger_class() {
             None => {
                 match self.passenger_class.get(&0) {
                     None => {
@@ -646,8 +650,8 @@ impl PassengerWeights {
                 }
             },
         }
-        
-        match training_passenger.get_sex() {
+		
+		match training_passenger.get_sex() {
             None => {
                 match self.sex.get(&0) {
                     None => {
@@ -689,8 +693,8 @@ impl PassengerWeights {
                 }
             },
         }
-        
-        match training_passenger.get_port_of_embarkation() {
+		
+		match training_passenger.get_port_of_embarkation() {
             None => {
                 match self.port_of_embarkation.get(&0) {
                     None => {
@@ -1168,7 +1172,7 @@ impl PassengerWeights {
     
     fn quick_convert(num: &usize) -> f64 {
         let mut result = 0_f64;
-        for _number in 1..*num {
+        for _number in 0..*num {
             result = result.add(1_f64);
         }
         result
@@ -1202,4 +1206,183 @@ impl Clone for PassengerWeights {
             port_of_embarkation,
         }
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    #[should_panic(expected = "not enough arguments")]
+    fn when_less_than_6_arguments_then_return_error() {
+        let args = vec!["first".to_string(), "second".to_string()];
+        Config::new(&args).unwrap();
+    }
+    
+    #[test]
+    fn when_at_least_6_arguments_then_create_config() {
+        let args = vec!["first".to_string(), "2".to_string(), "3".to_string(), "fourth".to_string(), "fifth".to_string(), "sixth".to_string()];
+        let conf = Config::new(&args).unwrap();
+        let mut sum_strings = String::new();
+        let mut sum_nums = 0_f64;
+        
+        sum_nums = sum_nums.add(conf.get_learning_rate());
+        sum_nums = sum_nums.add(conf.get_tolerance());
+        
+        sum_strings.push_str(&conf.training_data_filename);
+        sum_strings.push_str("-");
+        sum_strings.push_str(&conf.test_data_filename);
+        sum_strings.push_str("-");
+        sum_strings.push_str(&conf.output_filename);
+        
+        assert_abs_diff_eq!(sum_nums, 5_f64);
+        assert_eq!(&sum_strings, "fourth-fifth-sixth");
+    }
+	
+	#[test]
+	fn when_ref_usize_get_quick_convert_to_f64() {
+		assert_abs_diff_eq!(PassengerWeights::quick_convert(&23_usize),23_f64);
+	}
+	
+	#[test]
+	fn when_new_passenger_weights_and_training_passenger_then_get_hypothesis() {
+		// Initialize weights
+        let passenger_weights = PassengerWeights::new();
+		let training_passenger = TrainingPassenger::new(
+			1_u64,
+			Survived::Yes,
+			PassengerClass::First,
+			"Lewis Webb".to_string(),
+			Sex::Male,
+			25.33_f64,
+			3_usize,
+			2_usize,
+			"Golden Ticket".to_string(),
+			45.67_f64,
+			"1".to_string(),
+			PortOfEmbarkation::Southampton
+		);
+		assert_abs_diff_eq!(passenger_weights.hypothesis(&training_passenger).unwrap(), 1_f64.div(83_f64.exp().add(1_f64)));
+	}
+    
+    #[test]
+	fn when_new_passenger_weights_and_training_passenger_then_get_diff_hypothesis() {
+		// Initialize weights
+        let passenger_weights = PassengerWeights::new();
+		let training_passenger = TrainingPassenger::new(
+			1_u64,
+			Survived::Yes,
+			PassengerClass::First,
+			"Lewis Webb".to_string(),
+			Sex::Male,
+			25.33_f64,
+			3_usize,
+			2_usize,
+			"Golden Ticket".to_string(),
+			45.67_f64,
+			"1".to_string(),
+			PortOfEmbarkation::Southampton
+		);
+		assert_abs_diff_eq!(passenger_weights.diff_hypothesis(&training_passenger).unwrap(), 1_f64 - 1_f64.div(83_f64.exp().add(1_f64)));
+	}
+    
+    #[test]
+	fn when_new_passenger_weights_and_training_passenger_then_get_cost() {
+		// Initialize weights
+        let passenger_weights = PassengerWeights::new();
+		let training_passenger = TrainingPassenger::new(
+			1_u64,
+			Survived::Yes,
+			PassengerClass::First,
+			"Lewis Webb".to_string(),
+			Sex::Male,
+			25.33_f64,
+			3_usize,
+			2_usize,
+			"Golden Ticket".to_string(),
+			45.67_f64,
+			"1".to_string(),
+			PortOfEmbarkation::Southampton
+		);
+		assert_abs_diff_eq!(passenger_weights.cost(&training_passenger).unwrap(), -(1_f64.div(83_f64.exp().add(1_f64))).ln());
+	}
+    
+    #[test]
+	fn when_new_passenger_weights_and_training_passenger_then_get_avg_cost() {
+		// Initialize weights
+        let passenger_weights = PassengerWeights::new();
+		let training_passenger = TrainingPassenger::new(
+			1_u64,
+			Survived::Yes,
+			PassengerClass::First,
+			"Lewis Webb".to_string(),
+			Sex::Male,
+			25.33_f64,
+			3_usize,
+			2_usize,
+			"Golden Ticket".to_string(),
+			45.67_f64,
+			"1".to_string(),
+			PortOfEmbarkation::Southampton
+		);
+		let mut training_passengers = Vec::new();
+		training_passengers.push(training_passenger);
+		assert_abs_diff_eq!(passenger_weights.avg_cost(&training_passengers).unwrap(), -(1_f64.div(83_f64.exp().add(1_f64))).ln());
+	}
+	
+	#[test]
+	fn when_new_passenger_weights_and_training_passenger_and_add_1_to_all_weights_then_get_hypothesis() {
+		// Initialize weights
+        let mut passenger_weights = PassengerWeights::new();
+		let training_passenger = TrainingPassenger::new(
+			1_u64,
+			Survived::Yes,
+			PassengerClass::First,
+			"Lewis Webb".to_string(),
+			Sex::Male,
+			25.33_f64,
+			3_usize,
+			2_usize,
+			"Golden Ticket".to_string(),
+			45.67_f64,
+			"1".to_string(),
+			PortOfEmbarkation::Southampton
+		);
+		let mut training_passengers = Vec::new();
+		training_passengers.push(training_passenger);
+		passenger_weights.gradient_descent_update(&(-1_f64), &training_passengers).unwrap();
+		match training_passengers.get(0) {
+			None => panic!("tests::when_new_passenger_weights_and_training_passenger_and_gradient_descent_update_then_get_hypothesis could not find item in vec"),
+			Some(training_passenger0) => assert_abs_diff_eq!(passenger_weights.hypothesis(training_passenger0).unwrap(), 1_f64.div(93_f64.exp().add(1_f64))),
+		}
+		;
+	}
+	
+	#[test]
+	fn when_new_passenger_weights_and_training_passenger_and_gradient_descent_update_then_get_hypothesis() {
+		// Initialize weights
+        let mut passenger_weights = PassengerWeights::new();
+		let training_passenger = TrainingPassenger::new(
+			1_u64,
+			Survived::Yes,
+			PassengerClass::First,
+			"Lewis Webb".to_string(),
+			Sex::Male,
+			25.33_f64,
+			3_usize,
+			2_usize,
+			"Golden Ticket".to_string(),
+			45.67_f64,
+			"1".to_string(),
+			PortOfEmbarkation::Southampton
+		);
+		let mut training_passengers = Vec::new();
+		training_passengers.push(training_passenger);
+		passenger_weights.gradient_descent_update(&(-1_f64), &training_passengers).unwrap();
+		match training_passengers.get(0) {
+			None => panic!("tests::when_new_passenger_weights_and_training_passenger_and_gradient_descent_update_then_get_hypothesis could not find item in vec"),
+			Some(training_passenger0) => assert_abs_diff_eq!(passenger_weights.hypothesis(training_passenger0).unwrap(), 1_f64.div((83_f64.add((1_f64 - 1_f64.div(83_f64.exp().add(1_f64))).mul(10_f64))).exp().add(1_f64))),
+		}
+	}
 }

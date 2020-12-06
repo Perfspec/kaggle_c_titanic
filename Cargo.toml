@@ -1,6 +1,6 @@
 [package]
 name = "kaggle_c_titanic"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Perfspec <lewisrwebb@gmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -12,3 +12,4 @@ repository = "https://github.com/Perfspec/kaggle_c_titanic"
 [dependencies]
 csv = "1.1"
 serde = { version = "1.0", features = ["derive"] }
+approx = "0.4.0"
