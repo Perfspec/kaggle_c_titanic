@@ -107,6 +107,7 @@ pub fn run(config: &mut Config) -> Result<(), String> {
                             Err(error) => return Err(error),
                         }
                     }
+                    println!("Tolerable Cost Achieved: passenger_weights={:#?}", &passenger_weights);
                 },
                 Err(error) => return Err(error),
             }
