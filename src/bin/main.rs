@@ -10,8 +10,8 @@ fn main() {
 	// Argument 6: Path where the Output Data will be created
     let args: Vec<String> = vec![
 		"This vector can be loaded using std::env::args().collect() too.".to_string(),
-		"0.1".to_string(),
-		"0.0001".to_string(),
+		"0.0000001".to_string(),
+		"3".to_string(),
 		"data/train.csv".to_string(),
 		"data/test.csv".to_string(),
 		"output.csv".to_string()];
