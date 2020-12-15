@@ -427,18 +427,11 @@ pub struct TestedPassenger {
 
 impl TestedPassenger {
 	pub fn new(outcome: classification::Outcome) -> TestedPassenger {
-		match outcome.prediction {
-			classification::BinaryClass::Yes => {
-				TestedPassenger {
-					passenger_id: outcome.record_id,
-					survived: Survived::Yes
-				}
-			},
-			classification::BinaryClass::No => {
-				TestedPassenger {
-					passenger_id: outcome.record_id,
-					survived: Survived::No
-				}
+		TestedPassenger {
+			passenger_id: outcome.record_id,
+			survived: match outcome.prediction {
+				classification::BinaryClass::Yes => Survived::Yes,
+				classification::BinaryClass::No => Survived::No
 			}
 		}
 		
