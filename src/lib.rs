@@ -1,10 +1,12 @@
 use csv::{Reader, Writer};
 use serde::{Deserialize, Serialize};
-use std::ops::{Add, Mul, Div};
+use std::ops::{Add, Mul};
 use std::collections::HashMap;
 
 #[macro_use]
 extern crate approx;
+
+mod classification;
 
 pub struct Config {
     learning_rate: f64,
@@ -38,10 +40,6 @@ impl Config {
     
     pub fn get_learning_rate(&self) -> &f64 {
         &self.learning_rate
-    }
-    
-    pub fn set_learning_rate(&mut self, new_val: f64) {
-        self.learning_rate = new_val;
     }
     
     pub fn get_tolerance(&self) -> &f64 {
@@ -112,8 +110,8 @@ impl Config {
 		match Writer::from_path(self.get_output_filename()) {
 			Ok(mut writer) => {
 				for test_passenger in test_passengers {
-					let test_result = passenger_weights.test_hypothesis(test_passenger)?;
-					let tested_passenger = TestedPassenger::new(*test_passenger.get_passenger_id(), test_result);
+					let outcome = classification::predict(passenger_weights, test_passenger)?;
+					let tested_passenger = TestedPassenger::new(outcome);
 					
 					if let Err(e2) = writer.serialize(tested_passenger) {
 						let message = format!("Config::write_output Failed to serialize TestedPassenger {}. Serde: {}", test_passenger.get_passenger_id(), e2);
@@ -139,35 +137,7 @@ pub fn run(config: &mut Config) -> Result<(), String> {
 	// Initialize weights
 	let mut passenger_weights = PassengerWeights::new();
 	
-	match passenger_weights.avg_cost(&training_passengers) {
-		Ok(num) => {
-			let mut avg_cost = num;
-			let mut num_iterations = 0_u64;
-			println!("At iteration {}, the avg_cost is {}", num_iterations, avg_cost);
-			
-			while avg_cost.gt(config.get_tolerance()) {
-				match passenger_weights.gradient_descent_update(config.get_learning_rate(), &training_passengers) {
-					Ok(_) => {
-						num_iterations = num_iterations.add(1_u64);
-						match passenger_weights.avg_cost(&training_passengers) {
-							Ok(num) => {
-								if avg_cost.lt(&num) {
-									&mut config.set_learning_rate(config.get_learning_rate().div(100_f64));
-									println!("Learning rate divided by 10 at iteration {}. New learning_rate: {}", &num_iterations, config.get_learning_rate());
-								}
-								avg_cost = num;
-								println!("At iteration {}, the avg_cost is {}", &num_iterations, &avg_cost);
-							},
-							Err(error) => return Err(error),
-						}
-					},
-					Err(error) => return Err(error),
-				}
-			}
-			println!("Tolerable Cost Achieved: passenger_weights={:#?}", &passenger_weights);
-		},
-		Err(error) => return Err(error),
-	}
+	classification::solve(&training_passengers, &mut passenger_weights, *config.get_learning_rate(), config.get_tolerance())?;
 	
 	config.write_output(&passenger_weights, &test_passengers)
 }
@@ -453,14 +423,22 @@ pub struct TestedPassenger {
 }
 
 impl TestedPassenger {
-	pub fn new(
-        passenger_id: u64,
-        survived: Survived
-	) -> TestedPassenger {
-		TestedPassenger {
-			passenger_id,
-			survived
+	pub fn new(outcome: classification::Outcome) -> TestedPassenger {
+		match outcome.prediction {
+			classification::BinaryClass::Yes => {
+				TestedPassenger {
+					passenger_id: outcome.record_id,
+					survived: Survived::Yes
+				}
+			},
+			classification::BinaryClass::No => {
+				TestedPassenger {
+					passenger_id: outcome.record_id,
+					survived: Survived::No
+				}
+			}
 		}
+		
 	}
 }
 
@@ -547,18 +525,22 @@ impl PassengerWeights {
             port_of_embarkation,
         }
     }
-    
-    pub fn hypothesis(&self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
+}
+
+impl classification::LogisticBinaryClassificationTestable for TrainingPassenger {
+	type Weights = PassengerWeights;
+	
+    fn hypothesis(self: &Self, weights: &Self::Weights) -> Result<f64, String> {
         let mut weighted_sum = 0_f64;
         
-        weighted_sum = weighted_sum.add(self.bias);
+        weighted_sum = weighted_sum.add(weights.bias);
         
-        match training_passenger.get_name() {
+        match self.get_name() {
             None => {
-                match self.name.get(&0) {
+                match weights.name.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: name weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: name weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -567,10 +549,10 @@ impl PassengerWeights {
                 }
             },
             Some(_name) => {
-                match self.name.get(&1) {
+                match weights.name.get(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: name weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: name weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -580,12 +562,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_age() {
+        match self.get_age() {
             None => {
-                match self.age.get(&0) {
+                match weights.age.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: age weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: age weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -594,10 +576,10 @@ impl PassengerWeights {
                 }
             },
             Some(age) => {
-                match self.age.get(&1) {
+                match weights.age.get(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: age weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: age weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -607,12 +589,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_siblings_spouses() {
+        match self.get_siblings_spouses() {
             None => {
-                match self.siblings_spouses.get(&0) {
+                match weights.siblings_spouses.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: siblings_spouses weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: siblings_spouses weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -621,25 +603,25 @@ impl PassengerWeights {
                 }
             },
             Some(siblings_spouses) => {
-                match self.siblings_spouses.get(&1) {
+                match weights.siblings_spouses.get(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: siblings_spouses weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: siblings_spouses weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight.mul(PassengerWeights::quick_convert(siblings_spouses)));
+                        weighted_sum = weighted_sum.add(weight.mul(classification::quick_convert(siblings_spouses)));
                     },
                 }
             },
         }
         
-        match training_passenger.get_parents_children() {
+        match self.get_parents_children() {
             None => {
-                match self.parents_children.get(&0) {
+                match weights.parents_children.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: parents_children weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: parents_children weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -648,25 +630,25 @@ impl PassengerWeights {
                 }
             },
             Some(parents_children) => {
-                match self.parents_children.get(&1) {
+                match weights.parents_children.get(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: parents_children weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: parents_children weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight.mul(PassengerWeights::quick_convert(parents_children)));
+                        weighted_sum = weighted_sum.add(weight.mul(classification::quick_convert(parents_children)));
                     },
                 }
             },
         }
         
-        match training_passenger.get_fare() {
+        match self.get_fare() {
             None => {
-                match self.fare.get(&0) {
+                match weights.fare.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: fare weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: fare weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -675,10 +657,10 @@ impl PassengerWeights {
                 }
             },
             Some(fare) => {
-                match self.fare.get(&1) {
+                match weights.fare.get(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: fare weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: fare weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -688,12 +670,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_ticket_id() {
+        match self.get_ticket_id() {
             None => {
-                match self.ticket_id.get(&0) {
+                match weights.ticket_id.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: ticket_id weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: ticket_id weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -702,10 +684,10 @@ impl PassengerWeights {
                 }
             },
             Some(_ticket_id) => {
-                match self.ticket_id.get(&1) {
+                match weights.ticket_id.get(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: ticket_id weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: ticket_id weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -715,12 +697,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_cabin_id() {
+        match self.get_cabin_id() {
             None => {
-                match self.cabin_id.get(&0) {
+                match weights.cabin_id.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: cabin_id weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: cabin_id weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -729,10 +711,10 @@ impl PassengerWeights {
                 }
             },
             Some(_cabin_id) => {
-                match self.cabin_id.get(&1) {
+                match weights.cabin_id.get(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: cabin_id weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: cabin_id weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -742,12 +724,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_passenger_class() {
+        match self.get_passenger_class() {
             None => {
-                match self.passenger_class.get(&0) {
+                match weights.passenger_class.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: passenger_class weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: passenger_class weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -758,10 +740,10 @@ impl PassengerWeights {
             Some(passenger_class) => {
                 match passenger_class {
                     PassengerClass::First => {
-                        match self.passenger_class.get(&1) {
+                        match weights.passenger_class.get(&1) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::hypothesis: passenger_class weight 1 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: passenger_class weight 1 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -770,10 +752,10 @@ impl PassengerWeights {
                         }
                     },
                     PassengerClass::Second => {
-                        match self.passenger_class.get(&2) {
+                        match weights.passenger_class.get(&2) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::hypothesis: passenger_class weight 2 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: passenger_class weight 2 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -782,10 +764,10 @@ impl PassengerWeights {
                         }
                     },
                     PassengerClass::Third => {
-                        match self.passenger_class.get(&3) {
+                        match weights.passenger_class.get(&3) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::hypothesis: passenger_class weight 3 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: passenger_class weight 3 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -797,12 +779,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_sex() {
+        match self.get_sex() {
             None => {
-                match self.sex.get(&0) {
+                match weights.sex.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: sex weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: sex weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -813,10 +795,10 @@ impl PassengerWeights {
             Some(sex) => {
                 match sex {
                     Sex::Female => {
-                        match self.sex.get(&1) {
+                        match weights.sex.get(&1) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::hypothesis: sex weight 1 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: sex weight 1 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -825,10 +807,10 @@ impl PassengerWeights {
                         }
                     },
                     Sex::Male => {
-                        match self.sex.get(&2) {
+                        match weights.sex.get(&2) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::hypothesis: sex weight 2 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: sex weight 2 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -840,12 +822,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_port_of_embarkation() {
+        match self.get_port_of_embarkation() {
             None => {
-                match self.port_of_embarkation.get(&0) {
+                match weights.port_of_embarkation.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::hypothesis: port_of_embarkation weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: port_of_embarkation weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -856,10 +838,10 @@ impl PassengerWeights {
             Some(port_of_embarkation) => {
                 match port_of_embarkation {
                     PortOfEmbarkation::Cherbourg => {
-                        match self.port_of_embarkation.get(&1) {
+                        match weights.port_of_embarkation.get(&1) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::hypothesis: port_of_embarkation weight 1 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: port_of_embarkation weight 1 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -868,10 +850,10 @@ impl PassengerWeights {
                         }
                     },
                     PortOfEmbarkation::Southampton => {
-                        match self.port_of_embarkation.get(&2) {
+                        match weights.port_of_embarkation.get(&2) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::hypothesis: port_of_embarkation weight 2 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: port_of_embarkation weight 2 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -880,10 +862,10 @@ impl PassengerWeights {
                         }
                     },
                     PortOfEmbarkation::Queenstown => {
-                        match self.port_of_embarkation.get(&3) {
+                        match weights.port_of_embarkation.get(&3) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::hypothesis: port_of_embarkation weight 3 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: port_of_embarkation weight 3 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -895,88 +877,389 @@ impl PassengerWeights {
             },
         }
 
-        Ok(1_f64.div(weighted_sum.exp().add(1_f64)))
+        Ok(Self::logistic(weighted_sum))
     }
-    
-    pub fn cost(&self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
-        match training_passenger.get_survived() {
-            Survived::Yes => {
-                match self.hypothesis(training_passenger) {
-                    Ok(hypothesis) => Ok(-(hypothesis.ln())),
-                    Err(error) => Err(error),
-                }
-            },
-            Survived::No => {
-                match self.hypothesis(training_passenger) {
-                    Ok(hypothesis) => Ok(-((1_f64 - hypothesis).ln())),
-                    Err(error) => Err(error)
-                }
-            },
-        }
-    }
-    
-    pub fn avg_cost(&self, training_passengers: &Vec<TrainingPassenger>) -> Result<f64, String> {
-        let mut sum = 0_f64;
-        let mut counter = 0_f64;
+	
+	fn get_record_id(self: &Self) -> &u64 {
+		self.get_passenger_id()
+	}
+}
+
+impl classification::LogisticBinaryClassificationTestable for Passenger {
+    type Weights = PassengerWeights;
+	
+    fn hypothesis(self: &Self, weights: &Self::Weights) -> Result<f64, String> {
+        let mut weighted_sum = 0_f64;
         
-        for training_passenger in training_passengers {
-            match self.cost(training_passenger) {
-                Ok(cost) => {
-                    sum = sum.add(cost);
-                    counter = counter.add(1_f64);
-                },
-                Err(e) => {
-                    let passenger_id = training_passenger.get_passenger_id();
-                    let message = format!("PassengerWeights::avg_cost was unable to calculate cost for passenger_id: {}. {}", passenger_id, e);
-                    return Err(message)
-                },
-            }
-        }
+        weighted_sum = weighted_sum.add(weights.bias);
         
-        if counter.eq(&0_f64) {
-            let message = "PassengerWeights::avg_cost counter is a denominator and was zero".to_string();
-            return Err(message)
-        }
-        
-        Ok(sum.div(counter))
-    }
-    
-    pub fn gradient_descent_update(&mut self, learning_rate: &f64, training_passengers: &Vec<TrainingPassenger>) -> Result<(), String> {
-        let passenger_weights = self.clone();
-        for training_passenger in training_passengers {
-            match passenger_weights.diff_hypothesis(&training_passenger) {
-                Ok(diff) => {
-                    self.add(&(diff.mul(-learning_rate)), &training_passenger)?;
-                },
-                Err(error) => return Err(error),
-            }
-        }
-        Ok(())
-    }
-    
-    fn diff_hypothesis(&self, training_passenger: &TrainingPassenger) -> Result<f64, String> {
-        match *training_passenger.get_survived() {
-            Survived::Yes => {
-                match self.hypothesis(training_passenger) {
-                    Ok(hypothesis) => Ok(1_f64 - hypothesis),
-                    Err(error) => Err(error),
-                }
-            },
-            Survived::No => {
-                self.hypothesis(training_passenger)
-            },
-        }
-    }
-    
-    fn add(&mut self, diff: &f64, training_passenger: &TrainingPassenger) -> Result<(), String> {
-        self.bias = self.bias.add(diff);
-        
-        match training_passenger.get_name() {
+        match self.get_name() {
             None => {
-                match self.name.get_mut(&0) {
+                match weights.name.get(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: name weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: name weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(_name) => {
+                match weights.name.get(&1) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: name weight 1 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+        }
+        
+        match self.get_age() {
+            None => {
+                match weights.age.get(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: age weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(age) => {
+                match weights.age.get(&1) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: age weight 1 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight.mul(age));
+                    },
+                }
+            },
+        }
+        
+        match self.get_siblings_spouses() {
+            None => {
+                match weights.siblings_spouses.get(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: siblings_spouses weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(siblings_spouses) => {
+                match weights.siblings_spouses.get(&1) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: siblings_spouses weight 1 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight.mul(classification::quick_convert(siblings_spouses)));
+                    },
+                }
+            },
+        }
+        
+        match self.get_parents_children() {
+            None => {
+                match weights.parents_children.get(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: parents_children weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(parents_children) => {
+                match weights.parents_children.get(&1) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: parents_children weight 1 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight.mul(classification::quick_convert(parents_children)));
+                    },
+                }
+            },
+        }
+        
+        match self.get_fare() {
+            None => {
+                match weights.fare.get(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: fare weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(fare) => {
+                match weights.fare.get(&1) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: fare weight 1 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight.mul(fare));
+                    },
+                }
+            },
+        }
+        
+        match self.get_ticket_id() {
+            None => {
+                match weights.ticket_id.get(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: ticket_id weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(_ticket_id) => {
+                match weights.ticket_id.get(&1) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: ticket_id weight 1 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+        }
+        
+        match self.get_cabin_id() {
+            None => {
+                match weights.cabin_id.get(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: cabin_id weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(_cabin_id) => {
+                match weights.cabin_id.get(&1) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: cabin_id weight 1 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+        }
+        
+        match self.get_passenger_class() {
+            None => {
+                match weights.passenger_class.get(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: passenger_class weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(passenger_class) => {
+                match passenger_class {
+                    PassengerClass::First => {
+                        match weights.passenger_class.get(&1) {
+                            None => {
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: passenger_class weight 1 was unreachable for passenger {}", passenger_id);
+                                return Err(message)
+                            },
+                            Some(weight) => {
+                                weighted_sum = weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    PassengerClass::Second => {
+                        match weights.passenger_class.get(&2) {
+                            None => {
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: passenger_class weight 2 was unreachable for passenger {}", passenger_id);
+                                return Err(message)
+                            },
+                            Some(weight) => {
+                                weighted_sum = weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    PassengerClass::Third => {
+                        match weights.passenger_class.get(&3) {
+                            None => {
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: passenger_class weight 3 was unreachable for passenger {}", passenger_id);
+                                return Err(message)
+                            },
+                            Some(weight) => {
+                                weighted_sum = weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                }
+            },
+        }
+        
+        match self.get_sex() {
+            None => {
+                match weights.sex.get(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: sex weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(sex) => {
+                match sex {
+                    Sex::Female => {
+                        match weights.sex.get(&1) {
+                            None => {
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: sex weight 1 was unreachable for passenger {}", passenger_id);
+                                return Err(message)
+                            },
+                            Some(weight) => {
+                                weighted_sum = weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    Sex::Male => {
+                        match weights.sex.get(&2) {
+                            None => {
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: sex weight 2 was unreachable for passenger {}", passenger_id);
+                                return Err(message)
+                            },
+                            Some(weight) => {
+                                weighted_sum = weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                }
+            },
+        }
+        
+        match self.get_port_of_embarkation() {
+            None => {
+                match weights.port_of_embarkation.get(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTestable::hypothesis: port_of_embarkation weight 0 was unreachable for passenger {}", passenger_id);
+                        return Err(message)
+                    },
+                    Some(weight) => {
+                        weighted_sum = weighted_sum.add(weight);
+                    },
+                }
+            },
+            Some(port_of_embarkation) => {
+                match port_of_embarkation {
+                    PortOfEmbarkation::Cherbourg => {
+                        match weights.port_of_embarkation.get(&1) {
+                            None => {
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: port_of_embarkation weight 1 was unreachable for passenger {}", passenger_id);
+                                return Err(message)
+                            },
+                            Some(weight) => {
+                                weighted_sum = weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    PortOfEmbarkation::Southampton => {
+                        match weights.port_of_embarkation.get(&2) {
+                            None => {
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: port_of_embarkation weight 2 was unreachable for passenger {}", passenger_id);
+                                return Err(message)
+                            },
+                            Some(weight) => {
+                                weighted_sum = weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                    PortOfEmbarkation::Queenstown => {
+                        match weights.port_of_embarkation.get(&3) {
+                            None => {
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTestable::hypothesis: port_of_embarkation weight 3 was unreachable for passenger {}", passenger_id);
+                                return Err(message)
+                            },
+                            Some(weight) => {
+                                weighted_sum = weighted_sum.add(weight);
+                            },
+                        }
+                    },
+                }
+            },
+        }
+
+        Ok(Self::logistic(weighted_sum))
+    }
+	
+	fn get_record_id(self: &Self) -> &u64 {
+		self.get_passenger_id()
+	}
+}
+
+impl classification::LogisticBinaryClassificationTrainable for TrainingPassenger {
+	fn answer(self: &Self) -> classification::BinaryClass {
+		match self.get_survived() {
+			Survived::Yes => classification::BinaryClass::Yes,
+			Survived::No => classification::BinaryClass::No
+		}
+	}
+
+	fn update_weights(self: &Self, diff: &f64, weights: &mut Self::Weights) -> Result<(), String>{
+        weights.bias = weights.bias.add(diff);
+        
+        match self.get_name() {
+            None => {
+                match weights.name.get_mut(&0) {
+                    None => {
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: name weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -985,10 +1268,10 @@ impl PassengerWeights {
                 }
             },
             Some(_name) => {
-                match self.name.get_mut(&1) {
+                match weights.name.get_mut(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: name weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: name weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -998,12 +1281,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_age() {
+        match self.get_age() {
             None => {
-                match self.age.get_mut(&0) {
+                match weights.age.get_mut(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: age weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: age weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1012,10 +1295,10 @@ impl PassengerWeights {
                 }
             },
             Some(age) => {
-                match self.age.get_mut(&1) {
+                match weights.age.get_mut(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: age weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: age weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1025,12 +1308,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_siblings_spouses() {
+        match self.get_siblings_spouses() {
             None => {
-                match self.siblings_spouses.get_mut(&0) {
+                match weights.siblings_spouses.get_mut(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: siblings_spouses weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: siblings_spouses weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1039,25 +1322,25 @@ impl PassengerWeights {
                 }
             },
             Some(siblings_spouses) => {
-                match self.siblings_spouses.get_mut(&1) {
+                match weights.siblings_spouses.get_mut(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: siblings_spouses weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: siblings_spouses weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
-                        *weight = weight.add(diff.mul(PassengerWeights::quick_convert(siblings_spouses)));
+                        *weight = weight.add(diff.mul(classification::quick_convert(siblings_spouses)));
                     },
                 }
             },
         }
         
-        match training_passenger.get_parents_children() {
+        match self.get_parents_children() {
             None => {
-                match self.parents_children.get_mut(&0) {
+                match weights.parents_children.get_mut(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: parents_children weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: parents_children weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1066,25 +1349,25 @@ impl PassengerWeights {
                 }
             },
             Some(parents_children) => {
-                match self.parents_children.get_mut(&1) {
+                match weights.parents_children.get_mut(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: parents_children weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: parents_children weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
-                        *weight = weight.add(diff.mul(PassengerWeights::quick_convert(parents_children)));
+                        *weight = weight.add(diff.mul(classification::quick_convert(parents_children)));
                     },
                 }
             },
         }
         
-        match training_passenger.get_fare() {
+        match self.get_fare() {
             None => {
-                match self.fare.get_mut(&0) {
+                match weights.fare.get_mut(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: fare weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: fare weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1093,10 +1376,10 @@ impl PassengerWeights {
                 }
             },
             Some(fare) => {
-                match self.fare.get_mut(&1) {
+                match weights.fare.get_mut(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: fare weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: fare weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1106,12 +1389,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_ticket_id() {
+        match self.get_ticket_id() {
             None => {
-                match self.ticket_id.get_mut(&0) {
+                match weights.ticket_id.get_mut(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: ticket_id weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: ticket_id weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1120,10 +1403,10 @@ impl PassengerWeights {
                 }
             },
             Some(_ticket_id) => {
-                match self.ticket_id.get_mut(&1) {
+                match weights.ticket_id.get_mut(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: ticket_id weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: ticket_id weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1133,12 +1416,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_cabin_id() {
+        match self.get_cabin_id() {
             None => {
-                match self.cabin_id.get_mut(&0) {
+                match weights.cabin_id.get_mut(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: cabin_id weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: cabin_id weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1147,10 +1430,10 @@ impl PassengerWeights {
                 }
             },
             Some(_cabin_id) => {
-                match self.cabin_id.get_mut(&1) {
+                match weights.cabin_id.get_mut(&1) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: cabin_id weight 1 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: cabin_id weight 1 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1160,12 +1443,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_passenger_class() {
+        match self.get_passenger_class() {
             None => {
-                match self.passenger_class.get_mut(&0) {
+                match weights.passenger_class.get_mut(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: passenger_class weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: passenger_class weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1176,10 +1459,10 @@ impl PassengerWeights {
             Some(passenger_class) => {
                 match passenger_class {
                     PassengerClass::First => {
-                        match self.passenger_class.get_mut(&1) {
+                        match weights.passenger_class.get_mut(&1) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::add: passenger_class weight 1 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTrainable::update_weights: passenger_class weight 1 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -1188,10 +1471,10 @@ impl PassengerWeights {
                         }
                     },
                     PassengerClass::Second => {
-                        match self.passenger_class.get_mut(&2) {
+                        match weights.passenger_class.get_mut(&2) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::add: passenger_class weight 2 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTrainable::update_weights: passenger_class weight 2 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -1200,10 +1483,10 @@ impl PassengerWeights {
                         }
                     },
                     PassengerClass::Third => {
-                        match self.passenger_class.get_mut(&3) {
+                        match weights.passenger_class.get_mut(&3) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::add: passenger_class weight 3 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTrainable::update_weights: passenger_class weight 3 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -1215,12 +1498,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_sex() {
+        match self.get_sex() {
             None => {
-                match self.sex.get_mut(&0) {
+                match weights.sex.get_mut(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: sex weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: sex weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1231,10 +1514,10 @@ impl PassengerWeights {
             Some(sex) => {
                 match sex {
                     Sex::Female => {
-                        match self.sex.get_mut(&1) {
+                        match weights.sex.get_mut(&1) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::add: sex weight 1 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTrainable::update_weights: sex weight 1 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -1243,10 +1526,10 @@ impl PassengerWeights {
                         }
                     },
                     Sex::Male => {
-                        match self.sex.get_mut(&2) {
+                        match weights.sex.get_mut(&2) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::add: sex weight 2 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTrainable::update_weights: sex weight 2 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -1258,12 +1541,12 @@ impl PassengerWeights {
             },
         }
         
-        match training_passenger.get_port_of_embarkation() {
+        match self.get_port_of_embarkation() {
             None => {
-                match self.port_of_embarkation.get_mut(&0) {
+                match weights.port_of_embarkation.get_mut(&0) {
                     None => {
-                        let passenger_id = training_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::add: port_of_embarkation weight 0 was unreachable for passenger {}", passenger_id);
+                        let passenger_id = self.get_passenger_id();
+                        let message = format!("LogisticBinaryClassificationTrainable::update_weights: port_of_embarkation weight 0 was unreachable for passenger {}", passenger_id);
                         return Err(message)
                     },
                     Some(weight) => {
@@ -1274,10 +1557,10 @@ impl PassengerWeights {
             Some(port_of_embarkation) => {
                 match port_of_embarkation {
                     PortOfEmbarkation::Cherbourg => {
-                        match self.port_of_embarkation.get_mut(&1) {
+                        match weights.port_of_embarkation.get_mut(&1) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::add: port_of_embarkation weight 1 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTrainable::update_weights: port_of_embarkation weight 1 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -1286,10 +1569,10 @@ impl PassengerWeights {
                         }
                     },
                     PortOfEmbarkation::Southampton => {
-                        match self.port_of_embarkation.get_mut(&2) {
+                        match weights.port_of_embarkation.get_mut(&2) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::add: port_of_embarkation weight 2 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTrainable::update_weights: port_of_embarkation weight 2 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -1298,10 +1581,10 @@ impl PassengerWeights {
                         }
                     },
                     PortOfEmbarkation::Queenstown => {
-                        match self.port_of_embarkation.get_mut(&3) {
+                        match weights.port_of_embarkation.get_mut(&3) {
                             None => {
-                                let passenger_id = training_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::add: port_of_embarkation weight 3 was unreachable for passenger {}", passenger_id);
+                                let passenger_id = self.get_passenger_id();
+                                let message = format!("LogisticBinaryClassificationTrainable::update_weights: port_of_embarkation weight 3 was unreachable for passenger {}", passenger_id);
                                 return Err(message)
                             },
                             Some(weight) => {
@@ -1314,369 +1597,6 @@ impl PassengerWeights {
         }
 
         Ok(())
-    }
-    
-    fn quick_convert(num: &usize) -> f64 {
-        let mut result = 0_f64;
-        for _number in 0..*num {
-            result = result.add(1_f64);
-        }
-        result
-    }
-	
-	pub fn test_hypothesis(&self, test_passenger: &Passenger) -> Result<Survived, String> {
-        let mut weighted_sum = 0_f64;
-        
-        weighted_sum = weighted_sum.add(self.bias);
-        
-        match test_passenger.get_name() {
-            None => {
-                match self.name.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: name weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(_name) => {
-                match self.name.get(&1) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: name weight 1 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-        }
-        
-        match test_passenger.get_age() {
-            None => {
-                match self.age.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: age weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(age) => {
-                match self.age.get(&1) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: age weight 1 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight.mul(age));
-                    },
-                }
-            },
-        }
-        
-        match test_passenger.get_siblings_spouses() {
-            None => {
-                match self.siblings_spouses.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: siblings_spouses weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(siblings_spouses) => {
-                match self.siblings_spouses.get(&1) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: siblings_spouses weight 1 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight.mul(PassengerWeights::quick_convert(siblings_spouses)));
-                    },
-                }
-            },
-        }
-        
-        match test_passenger.get_parents_children() {
-            None => {
-                match self.parents_children.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: parents_children weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(parents_children) => {
-                match self.parents_children.get(&1) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: parents_children weight 1 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight.mul(PassengerWeights::quick_convert(parents_children)));
-                    },
-                }
-            },
-        }
-        
-        match test_passenger.get_fare() {
-            None => {
-                match self.fare.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: fare weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(fare) => {
-                match self.fare.get(&1) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: fare weight 1 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight.mul(fare));
-                    },
-                }
-            },
-        }
-        
-        match test_passenger.get_ticket_id() {
-            None => {
-                match self.ticket_id.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: ticket_id weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(_ticket_id) => {
-                match self.ticket_id.get(&1) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: ticket_id weight 1 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-        }
-        
-        match test_passenger.get_cabin_id() {
-            None => {
-                match self.cabin_id.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: cabin_id weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(_cabin_id) => {
-                match self.cabin_id.get(&1) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: cabin_id weight 1 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-        }
-        
-        match test_passenger.get_passenger_class() {
-            None => {
-                match self.passenger_class.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: passenger_class weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(passenger_class) => {
-                match passenger_class {
-                    PassengerClass::First => {
-                        match self.passenger_class.get(&1) {
-                            None => {
-                                let passenger_id = test_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::test_hypothesis: passenger_class weight 1 was unreachable for passenger {}", passenger_id);
-                                return Err(message)
-                            },
-                            Some(weight) => {
-                                weighted_sum = weighted_sum.add(weight);
-                            },
-                        }
-                    },
-                    PassengerClass::Second => {
-                        match self.passenger_class.get(&2) {
-                            None => {
-                                let passenger_id = test_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::test_hypothesis: passenger_class weight 2 was unreachable for passenger {}", passenger_id);
-                                return Err(message)
-                            },
-                            Some(weight) => {
-                                weighted_sum = weighted_sum.add(weight);
-                            },
-                        }
-                    },
-                    PassengerClass::Third => {
-                        match self.passenger_class.get(&3) {
-                            None => {
-                                let passenger_id = test_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::test_hypothesis: passenger_class weight 3 was unreachable for passenger {}", passenger_id);
-                                return Err(message)
-                            },
-                            Some(weight) => {
-                                weighted_sum = weighted_sum.add(weight);
-                            },
-                        }
-                    },
-                }
-            },
-        }
-        
-        match test_passenger.get_sex() {
-            None => {
-                match self.sex.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: sex weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(sex) => {
-                match sex {
-                    Sex::Female => {
-                        match self.sex.get(&1) {
-                            None => {
-                                let passenger_id = test_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::test_hypothesis: sex weight 1 was unreachable for passenger {}", passenger_id);
-                                return Err(message)
-                            },
-                            Some(weight) => {
-                                weighted_sum = weighted_sum.add(weight);
-                            },
-                        }
-                    },
-                    Sex::Male => {
-                        match self.sex.get(&2) {
-                            None => {
-                                let passenger_id = test_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::test_hypothesis: sex weight 2 was unreachable for passenger {}", passenger_id);
-                                return Err(message)
-                            },
-                            Some(weight) => {
-                                weighted_sum = weighted_sum.add(weight);
-                            },
-                        }
-                    },
-                }
-            },
-        }
-        
-        match test_passenger.get_port_of_embarkation() {
-            None => {
-                match self.port_of_embarkation.get(&0) {
-                    None => {
-                        let passenger_id = test_passenger.get_passenger_id();
-                        let message = format!("PassengerWeights::test_hypothesis: port_of_embarkation weight 0 was unreachable for passenger {}", passenger_id);
-                        return Err(message)
-                    },
-                    Some(weight) => {
-                        weighted_sum = weighted_sum.add(weight);
-                    },
-                }
-            },
-            Some(port_of_embarkation) => {
-                match port_of_embarkation {
-                    PortOfEmbarkation::Cherbourg => {
-                        match self.port_of_embarkation.get(&1) {
-                            None => {
-                                let passenger_id = test_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::test_hypothesis: port_of_embarkation weight 1 was unreachable for passenger {}", passenger_id);
-                                return Err(message)
-                            },
-                            Some(weight) => {
-                                weighted_sum = weighted_sum.add(weight);
-                            },
-                        }
-                    },
-                    PortOfEmbarkation::Southampton => {
-                        match self.port_of_embarkation.get(&2) {
-                            None => {
-                                let passenger_id = test_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::test_hypothesis: port_of_embarkation weight 2 was unreachable for passenger {}", passenger_id);
-                                return Err(message)
-                            },
-                            Some(weight) => {
-                                weighted_sum = weighted_sum.add(weight);
-                            },
-                        }
-                    },
-                    PortOfEmbarkation::Queenstown => {
-                        match self.port_of_embarkation.get(&3) {
-                            None => {
-                                let passenger_id = test_passenger.get_passenger_id();
-                                let message = format!("PassengerWeights::test_hypothesis: port_of_embarkation weight 3 was unreachable for passenger {}", passenger_id);
-                                return Err(message)
-                            },
-                            Some(weight) => {
-                                weighted_sum = weighted_sum.add(weight);
-                            },
-                        }
-                    },
-                }
-            },
-        }
-
-        let real_hypothesis = 1_f64.div(weighted_sum.exp().add(1_f64));
-		if real_hypothesis > 0.5 {
-			Ok(Survived::Yes)
-		} else {
-			Ok(Survived::No)
-		}
     }
 }
 
@@ -1739,11 +1659,6 @@ mod tests {
         
         assert_abs_diff_eq!(sum_nums, 5_f64);
         assert_eq!(&sum_strings, "fourth-fifth-sixth");
-    }
-    
-    #[test]
-    fn when_ref_usize_get_quick_convert_to_f64() {
-        assert_abs_diff_eq!(PassengerWeights::quick_convert(&23_usize),23_f64);
     }
     
     #[test]
